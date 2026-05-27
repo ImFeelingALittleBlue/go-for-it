@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -20,7 +22,7 @@ android {
 
         // 從 local.properties 讀取 Mapbox 公開金鑰，注入成 @string/mapbox_access_token
         // resValue：在編譯時動態產生字串資源，不用把金鑰寫死在程式碼裡
-        val localProps = java.util.Properties().also { props ->
+        val localProps = Properties().also { props ->
             rootProject.file("local.properties").takeIf { it.exists() }
                 ?.inputStream()?.use { props.load(it) }
         }
