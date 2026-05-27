@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">臺南古蹟跑步</string>
+    <!--
+        mapbox_access_token 由 build.gradle.kts 的 resValue 在編譯時注入
+        實際金鑰存放在 local.properties（不上傳 git）
+    -->
+</resources>

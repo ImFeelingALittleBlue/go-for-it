@@ -1,0 +1,23 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Claude Code 設定（本機專用）
+.claude/
+
+# 敏感金鑰檔案（絕對不要上傳！）
+local.properties
+google-services.json
+**/google-services.json

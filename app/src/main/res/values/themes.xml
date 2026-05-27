@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Activity 的視窗主題（控制狀態列顏色等視窗層級設定）
+        NoActionBar：因為我們用 Compose 自訂 TopAppBar，不要預設的標題列
+    -->
+    <style name="Theme.GoForIt" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
+</resources>
