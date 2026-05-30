@@ -7,6 +7,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -22,6 +25,7 @@ import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.MapView
 import com.mapbox.maps.Style
+import com.mapbox.maps.plugin.locationcomponent.location
 
 val OrangeAccent = Color(0xFFD4822A)    // 設計稿主色
 val TextGray     = Color(0xFF888888)
@@ -29,9 +33,9 @@ val ChipBg       = Color(0xFFF0EDE8)
 
 @Composable
 fun HomeScreen() {
-    val context       = LocalContext.current
+    val context        = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val mapView       = remember { MapView(context) }
+    val mapView        = remember { MapView(context) }
 
     // 地圖跟著 Activity 生命週期啟動 / 暫停 / 銷毀
     DisposableEffect(lifecycleOwner) {
@@ -43,6 +47,10 @@ fun HomeScreen() {
         lifecycleOwner.lifecycle.addObserver(obs)
         onDispose { lifecycleOwner.lifecycle.removeObserver(obs); mapView.onDestroy() }
     }
+
+    // 權限狀態：用 state 追蹤，這樣變更時 AndroidView 的 update 會被觸發
+    var locationGranted by ㄒㄧㄢremember { mutableStateOf(false) }
+    rememberLocationPermission { locationGranted = true }
 
     Column(
         modifier = Modifier.fillMaxSize().background(Color.White)
@@ -62,6 +70,12 @@ fun HomeScreen() {
                                     .zoom(13.0).build()
                             )
                         }
+                    }
+                },
+                // update：當 locationGranted 變成 true 時被呼叫，此時樣式已載入完成
+                update = { mv ->
+                    if (locationGranted) {
+                        mv.location.updateSettings { enabled = true }
                     }
                 },
                 modifier = Modifier.fillMaxSize()
