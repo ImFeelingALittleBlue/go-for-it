@@ -1,6 +1,8 @@
 *.iml
 .gradle
 /local.properties
+/build
+app/build
 /.idea/caches
 /.idea/libraries
 /.idea/modules.xml
@@ -16,6 +18,11 @@ local.properties
 
 # Claude Code 設定（本機專用）
 .claude/
+
+# 根目錄的截圖（設計稿參考用，不上傳）
+/*.png
+/*.jpg
+/*.jpeg
 
 # 敏感金鑰檔案（絕對不要上傳！）
 local.properties

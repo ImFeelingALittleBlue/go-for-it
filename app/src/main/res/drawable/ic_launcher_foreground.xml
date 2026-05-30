@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- App 圖示前景：白色「G」字（Go for it 縮寫） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,28 C39.6,28 28,39.6 28,54 C28,68.4 39.6,80 54,80
+                          C66.2,80 76.4,71.8 79.2,60.6 L54,60.6 L54,52 L88,52
+                          C88.4,54 88.6,56 88.6,58 C88.6,74.8 73.2,88 54,88
+                          C34.8,88 20,73.2 20,54 C20,34.8 34.8,20 54,20
+                          C63.4,20 71.8,23.8 77.8,29.8 L72,35.6
+                          C67.6,31.4 61.2,28 54,28 Z" />
+</vector>

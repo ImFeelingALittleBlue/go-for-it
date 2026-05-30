@@ -43,8 +43,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
-        // JPX 用到 Java 8 時間 API，這行讓它可以在 Android 上正常運作
-        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -65,9 +63,6 @@ android {
 }
 
 dependencies {
-    // ── Desugaring：讓 Java 8 時間 API 在 Android 26 以下也能跑 ────────────
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-
     // ── Jetpack Compose ──────────────────────────────────────────────────────
     // BOM 統一管理所有 Compose 版本，底下的 Compose 依賴不用個別寫版本
     val composeBom = platform("androidx.compose:compose-bom:2025.03.00")
@@ -109,7 +104,8 @@ dependencies {
     implementation("androidx.media3:media3-session:1.5.1") // 背景播放 + 通知列控制鍵
 
     // ── JPX：解析使用者匯入的 GPX 路線檔 ────────────────────────────────────
-    implementation("io.jenetics:jpx:3.2.0")
+    // 注意：3.x 用了 Java Records 導致 Android 編譯錯誤，改用 2.x
+    implementation("io.jenetics:jpx:2.3.0")
 
     // ── Kotlin 協程（Firebase、Room 的非同步呼叫都靠這個）────────────────────
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1")
