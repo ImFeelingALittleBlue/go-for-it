@@ -44,10 +44,10 @@ class MainActivity : ComponentActivity() {
                         modifier         = Modifier.padding(innerPadding)
                     ) {
                         // 每個 composable 對應一個頁面
-                        composable(Screen.Home.route)       { HomeScreen() }
-                        composable(Screen.Run.route)        { RunScreen() }
-                        composable(Screen.Map.route)        { MapScreen() }
-                        composable(Screen.Collection.route) { CollectionScreen() }
+                        composable(Screen.Home.route)    { HomeScreen() }
+                        composable(Screen.Run.route)     { RunScreen() }
+                        composable(Screen.Records.route) { CollectionScreen() }
+                        composable(Screen.Account.route) { MapScreen() }
                     }
                 }
             }

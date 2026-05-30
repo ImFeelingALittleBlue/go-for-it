@@ -2,25 +2,22 @@ package com.example.goforit.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DirectionsRun
-import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.ui.graphics.vector.ImageVector
 
-// sealed class 就像「有限種類的列舉」，每個 Screen 代表一個底部分頁
-// route 是頁面的「名字」，NavController 用它來知道要跳去哪
 sealed class Screen(
-    val route: String,      // 導航用的路徑字串
-    val label: String,      // 顯示在導航列的文字
-    val icon: ImageVector   // 顯示在導航列的圖示
+    val route: String,
+    val label: String,
+    val icon: ImageVector
 ) {
-    object Home       : Screen("home",       "首頁", Icons.Default.Home)
-    object Run        : Screen("run",        "跑步", Icons.Default.DirectionsRun)
-    object Map        : Screen("map",        "地圖", Icons.Default.Map)
-    object Collection : Screen("collection", "收藏", Icons.Default.EmojiEvents)
+    object Home       : Screen("home",       "我的地圖", Icons.Default.Map)
+    object Run        : Screen("run",        "去探索",   Icons.Default.DirectionsRun)
+    object Records    : Screen("records",    "紀錄",     Icons.Default.History)
+    object Account    : Screen("account",    "帳號",     Icons.Default.Person)
 
     companion object {
-        // 所有分頁的清單，BottomNavBar 用這個自動產生按鈕
-        val items = listOf(Home, Run, Map, Collection)
+        val items = listOf(Home, Run, Records, Account)
     }
 }
