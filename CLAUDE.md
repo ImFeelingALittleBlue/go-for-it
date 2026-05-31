@@ -23,8 +23,9 @@ Figma 設計稿：https://www.figma.com/design/DvrclsHl9R2hLEpDAoHhdk/Untitled?n
 | Mapbox Maps | 11.9.0 | 地圖導航 |
 | Firebase BOM | 33.13.0 | Auth + Firestore + Storage + Functions |
 | Media3 | 1.5.1 | 音訊播放（語音導覽） |
-| JPX | 2.3.0 | 解析使用者匯入的 GPX 檔（3.x 有 Java Records 相容問題，維持 2.3.0） |
 | KSP | 2.1.10-1.0.31 | Room 代碼生成（編譯時） |
+
+> ⚠️ JPX 已移除：JPX 底層使用 `javax.xml.stream.XMLInputFactory`，Android 上不存在此類別會直接 crash。GPX 解析改用 Android 內建的 `XmlPullParser`（見 `GpxParser.kt`）。
 
 ## Package 名稱
 `com.example.goforit`
@@ -47,24 +48,27 @@ Figma 設計稿：https://www.figma.com/design/DvrclsHl9R2hLEpDAoHhdk/Untitled?n
 
 > ⚠️ `local.properties` 已加入 `.gitignore`，協作者須自行建立（見 Readme.md）
 
-## 目前狀態（2026-05-30）
+## 目前狀態（2026-05-31）
 - [x] 專案 Gradle 架構建立完成
-- [x] 所有依賴設定完成（Compose、Room、Mapbox、Firebase、Media3、JPX 2.3.0）
+- [x] 所有依賴設定完成（Compose、Room、Mapbox、Firebase、Media3）
 - [x] Mapbox 兩個金鑰已設定（存於 local.properties，不進 git）
 - [x] Firebase google-services.json 已放入
 - [x] Gradle sync 成功
 - [x] 底部導航列（我的地圖 / 去探索 / 紀錄 / 帳號）
 - [x] 首頁 UI：搜尋列 + Mapbox 地圖 + 附近古蹟列表（暫用假資料）
 - [x] GPS 定位權限請求 + 地圖藍點（`LocationPermission.kt`）
-- [ ] 跑步畫面（去探索）：地圖 + 計時 + 軌跡記錄
+- [x] 跑步畫面（去探索1）：地圖 + 古蹟標記 + 計時器 + GPS 軌跡折線 + 開始/停止
+- [x] 已儲存路線畫面（去探索2）：路線清單 + GPX 上傳按鈕
+- [x] GPX 路線匯入：XmlPullParser 解析 + Haversine 距離計算
+- [x] 路線預覽畫面（去探索3）：地圖折線 + 距離徽章 + AI 導覽佔位符 + 開始跑步
 - [ ] Room DB：從 metadata.csv 匯入古蹟資料
 - [ ] 古蹟觸發：進入 40m 範圍自動播放語音
-- [ ] GPX 路線匯入
+- [ ] AI 語音導覽：Firebase Functions + Claude API 生成旁白
 - [ ] 時光銀鹽積分 + 老照片兌換
 - [ ] 使用者登入（Firebase Auth）
 
 ## 下一步
-**跑步畫面**（去探索）：Mapbox 地圖 + 開始/停止按鈕 + 計時器
+**Room DB**：從 `metadata.csv` 匯入 130+ 筆古蹟資料，供地圖標記與古蹟觸發使用
 
 ## 專案目錄結構
 ```
@@ -79,7 +83,11 @@ app/src/main/kotlin/com/example/goforit/
     │   ├── HeritageSection.kt         ← 附近古蹟列表區塊
     │   └── LocationPermission.kt      ← GPS 權限請求邏輯
     ├── run/
-    │   └── RunScreen.kt               ← 跑步畫面（待實作）
+    │   ├── RunScreen.kt               ← 去探索主畫面（地圖 + 計時 + 軌跡）
+    │   ├── RunTracker.kt              ← GPS 軌跡記錄（LocationManager）
+    │   ├── SavedRoutesScreen.kt       ← 去探索2：已儲存路線 + GPX 上傳
+    │   ├── GpxParser.kt               ← GPX 解析（XmlPullParser + Haversine）
+    │   └── RoutePreviewScreen.kt      ← 去探索3：路線預覽 + 開始跑步
     ├── collection/
     │   └── CollectionScreen.kt        ← 收藏畫面（待實作）
     ├── map/

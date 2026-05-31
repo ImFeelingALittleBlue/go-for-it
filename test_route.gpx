@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>臺南古城測試路線</name>
+    <trkseg>
+      <trkpt lat="23.0040" lon="120.2030"></trkpt>
+      <trkpt lat="23.0032" lon="120.2025"></trkpt>
+      <trkpt lat="23.0020" lon="120.2031"></trkpt>
+      <trkpt lat="23.0010" lon="120.2038"></trkpt>
+      <trkpt lat="23.0005" lon="120.2040"></trkpt>
+      <trkpt lat="22.9995" lon="120.2033"></trkpt>
+      <trkpt lat="22.9980" lon="120.2018"></trkpt>
+      <trkpt lat="22.9972" lon="120.2008"></trkpt>
+      <trkpt lat="22.9985" lon="120.2003"></trkpt>
+      <trkpt lat="23.0005" lon="120.2005"></trkpt>
+      <trkpt lat="23.0025" lon="120.2010"></trkpt>
+      <trkpt lat="23.0040" lon="120.2030"></trkpt>
+    </trkseg>
+  </trk>
+</gpx>

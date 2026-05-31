@@ -15,7 +15,6 @@ Figma 設計稿：https://www.figma.com/design/DvrclsHl9R2hLEpDAoHhdk/Untitled?n
 | Mapbox Maps | 11.9.0 | 地圖導航 |
 | Firebase | BOM 33.13.0 | Auth + Firestore + Storage + Functions |
 | Media3 (ExoPlayer) | 1.5.1 | 語音播放 |
-| JPX | 2.3.0 | GPX 路線解析 |
 
 ---
 
@@ -25,10 +24,11 @@ Figma 設計稿：https://www.figma.com/design/DvrclsHl9R2hLEpDAoHhdk/Untitled?n
 - [x] 底部導航列（我的地圖 / 去探索 / 紀錄 / 帳號）
 - [x] 首頁 UI：搜尋列 + Mapbox 地圖 + 附近古蹟列表
 - [x] GPS 定位權限請求 + 地圖藍點顯示
-- [ ] 跑步畫面：Mapbox 地圖 + 計時 + 軌跡記錄
+- [x] 跑步畫面（去探索）：地圖 + 計時器 + GPS 軌跡記錄
+- [x] GPX 路線匯入：檔案選擇 + XmlPullParser 解析 + 路線預覽地圖
 - [ ] Room DB：從 metadata.csv 匯入 130+ 筆古蹟資料
 - [ ] 古蹟觸發：進入 40m 範圍自動播放語音
-- [ ] GPX 路線匯入
+- [ ] AI 語音導覽：Firebase Functions + Claude API 生成旁白
 - [ ] 時光銀鹽：積分收集 + 老照片兌換
 - [ ] 使用者登入（Firebase Auth）
 
