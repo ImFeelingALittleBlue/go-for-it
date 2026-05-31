@@ -11,17 +11,20 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.goforit.data.RestorationRepository
 import com.example.goforit.navigation.BottomNavBar
 import com.example.goforit.navigation.Screen
+import com.example.goforit.ui.account.AccountScreen
 import com.example.goforit.ui.collection.CollectionScreen
 import com.example.goforit.ui.home.HomeScreen
-import com.example.goforit.ui.map.MapScreen
 import com.example.goforit.ui.run.RunScreen
 import com.example.goforit.ui.theme.GoForItTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 匿名登入 + 開始監聽雲端修復紀錄（App 一啟動就準備好）
+        RestorationRepository.start()
         enableEdgeToEdge()
         setContent {
             GoForItTheme {
@@ -47,7 +50,7 @@ class MainActivity : ComponentActivity() {
                         composable(Screen.Home.route)    { HomeScreen() }
                         composable(Screen.Run.route)     { RunScreen() }
                         composable(Screen.Records.route) { CollectionScreen() }
-                        composable(Screen.Account.route) { MapScreen() }
+                        composable(Screen.Account.route) { AccountScreen() }
                     }
                 }
             }

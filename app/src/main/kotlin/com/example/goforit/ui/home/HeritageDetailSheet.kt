@@ -24,7 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.goforit.data.Heritage
-import com.example.goforit.data.RestoredStore
+import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.SilverSaltStore
 
 // 修復一座古蹟需要的時光銀鹽點數
@@ -40,10 +40,10 @@ fun HeritageDetailSheet(
 ) {
     val context = LocalContext.current
 
-    // 觀察：目前點數、已修復清單。任一改變這張卡都會自動重畫
+    // 觀察：目前點數、雲端修復紀錄。任一改變這張卡都會自動重畫
     val points by SilverSaltStore.points(context)
-    val restoredList = RestoredStore.restored(context)
-    val isRestored = restoredList.contains(heritage.id)
+    val records = RestorationRepository.records()
+    val isRestored = records.any { it.heritageId == heritage.id }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -107,9 +107,9 @@ fun HeritageDetailSheet(
                 val enough = points >= RESTORE_COST
                 Button(
                     onClick = {
-                        // 先扣點數，扣成功才標記為已修復
+                        // 先扣點數，扣成功才寫一筆修復紀錄到雲端
                         if (SilverSaltStore.spend(context, RESTORE_COST)) {
-                            RestoredStore.restore(context, heritage.id)
+                            RestorationRepository.add(heritage)
                         }
                     },
                     enabled = enough,

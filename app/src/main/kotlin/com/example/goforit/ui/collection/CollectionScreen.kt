@@ -1,76 +1,142 @@
 package com.example.goforit.ui.collection
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.goforit.data.SilverSaltStore
+import com.example.goforit.data.RestorationRecord
+import com.example.goforit.data.RestorationRepository
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
-// 收藏畫面：顯示目前的「時光銀鹽」點數
-// （之後第 4、5 步會在這裡加上已修復古蹟的老照片牆）
+private val Cream = Color(0xFFF3EFE7)
+private val Brown = Color(0xFF8A5A2B)
+private val Gray = Color(0xFF999999)
+
+// 收藏頁：顯示已修復古蹟的紀錄（含完成時間，可刪除）
 @Composable
 fun CollectionScreen() {
-    val context = LocalContext.current
+    // 觀察雲端紀錄清單（新增/刪除會自動更新）
+    val records = RestorationRepository.records()
 
-    // by + points()：觀察共用點數狀態，數字一變這個畫面就自動重畫
-    val points by SilverSaltStore.points(context)
+    // 搜尋字串：依古蹟名稱過濾
+    var query by remember { mutableStateOf("") }
+    val filtered = records.filter { it.name.contains(query, ignoreCase = true) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("時光銀鹽", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(4.dp))
-        Text("探索越多，沖洗越多", fontSize = 13.sp, color = Color(0xFF888888))
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        Spacer(Modifier.height(12.dp))
+        SearchField(query = query, onChange = { query = it })
+        Spacer(Modifier.height(12.dp))
 
-        Spacer(Modifier.height(20.dp))
+        if (filtered.isEmpty()) {
+            EmptyHint()
+        } else {
+            // 依「今天 / 過去」分兩組顯示
+            val today = filtered.filter { isToday(it.restoredAt) }
+            val past = filtered.filter { !isToday(it.restoredAt) }
 
-        // ── 點數卡片 ─────────────────────────────────────────────────────────
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = Color(0xFF8A5A2B),          // 古銅褐
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier.padding(24.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFF5D58A))
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text("目前擁有", color = Color(0xFFE8D8C0), fontSize = 13.sp)
-                    Text(
-                        "$points 銀鹽",
-                        color = Color.White,
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (today.isNotEmpty()) {
+                    item { SectionLabel(todayLabel()) }
+                    items(today, key = { it.docId }) { RecordCard(it) }
+                }
+                if (past.isNotEmpty()) {
+                    item { SectionLabel("過去紀錄") }
+                    items(past, key = { it.docId }) { RecordCard(it) }
                 }
             }
         }
+    }
+}
 
-        Spacer(Modifier.height(24.dp))
-
-        // ── 測試用按鈕：手動加 10 點，驗證「會增加」且「重開還在」──────────────
-        // （正式版會改成跑步、答題時自動發放，這顆之後會移除）
-        Button(
-            onClick = { SilverSaltStore.add(context, 10) },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp)
+@Composable
+private fun SearchField(query: String, onChange: (String) -> Unit) {
+    Surface(shape = RoundedCornerShape(24.dp), color = Color.White, shadowElevation = 1.dp) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("賺取 +10（測試用）", modifier = Modifier.padding(vertical = 4.dp))
+            Icon(Icons.Default.Search, contentDescription = null, tint = Gray)
+            TextField(
+                value = query,
+                onValueChange = onChange,
+                placeholder = { Text("搜尋你的紀錄", color = Gray, fontSize = 14.sp) },
+                singleLine = true,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(text, fontSize = 13.sp, color = Gray, fontWeight = FontWeight.Medium)
+}
+
+// 單筆修復紀錄卡片
+@Composable
+private fun RecordCard(record: RestorationRecord) {
+    Surface(shape = RoundedCornerShape(16.dp), color = Cream) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(record.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Spacer(Modifier.height(4.dp))
+                Text("修復於 ${formatTime(record.restoredAt)}", fontSize = 12.sp, color = Brown)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    record.description,
+                    fontSize = 12.sp,
+                    color = Gray,
+                    maxLines = 2
+                )
+            }
+            // 刪除按鈕
+            IconButton(onClick = { RestorationRepository.delete(record.docId) }) {
+                Icon(Icons.Default.DeleteOutline, contentDescription = "刪除", tint = Gray)
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyHint() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text("還沒有修復任何古蹟\n到地圖上花費時光銀鹽修復吧", color = Gray, fontSize = 14.sp)
+    }
+}
+
+// ── 時間工具 ──────────────────────────────────────────────────────────────
+private fun isToday(millis: Long): Boolean {
+    val now = Calendar.getInstance()
+    val then = Calendar.getInstance().apply { timeInMillis = millis }
+    return now.get(Calendar.YEAR) == then.get(Calendar.YEAR) &&
+            now.get(Calendar.DAY_OF_YEAR) == then.get(Calendar.DAY_OF_YEAR)
+}
+
+private fun todayLabel(): String =
+    SimpleDateFormat("M月d日 · 今天", Locale.TAIWAN).format(Date())
+
+private fun formatTime(millis: Long): String =
+    SimpleDateFormat("M月d日 HH:mm", Locale.TAIWAN).format(Date(millis))
