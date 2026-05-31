@@ -49,7 +49,7 @@ fun HomeScreen() {
     }
 
     // 權限狀態：用 state 追蹤，這樣變更時 AndroidView 的 update 會被觸發
-    var locationGranted by ㄒㄧㄢremember { mutableStateOf(false) }
+    var locationGranted by remember { mutableStateOf(false) }
     rememberLocationPermission { locationGranted = true }
 
     Column(
