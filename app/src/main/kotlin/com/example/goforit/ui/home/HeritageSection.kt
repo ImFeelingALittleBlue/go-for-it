@@ -1,7 +1,6 @@
 package com.example.goforit.ui.home
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -53,9 +52,9 @@ fun NearbyHeritageSection(modifier: Modifier = Modifier) {
         Spacer(Modifier.height(4.dp))
 
         // ── 古蹟列表 ─────────────────────────────────────────────────────────
-        LazyColumn {
-            items(sampleSites.size) { i ->
-                val (name, period, unlocked) = sampleSites[i]
+        // 只有少量資料，用 Column 即可；LazyColumn 不能放在 verticalScroll 裡
+        Column {
+            sampleSites.forEach { (name, period, unlocked) ->
                 HeritageItem(name = name, period = period, unlocked = unlocked)
                 HorizontalDivider(color = ChipBg, thickness = 1.dp)
             }
