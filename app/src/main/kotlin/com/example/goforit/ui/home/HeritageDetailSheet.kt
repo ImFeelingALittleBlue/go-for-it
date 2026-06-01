@@ -26,6 +26,9 @@ import androidx.compose.ui.unit.sp
 import com.example.goforit.data.Heritage
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.SilverSaltStore
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 // 修復一座古蹟需要的時光銀鹽點數
 private const val RESTORE_COST = 100
@@ -43,7 +46,8 @@ fun HeritageDetailSheet(
     // 觀察：目前點數、雲端修復紀錄。任一改變這張卡都會自動重畫
     val points by SilverSaltStore.points(context)
     val records = RestorationRepository.records()
-    val isRestored = records.any { it.heritageId == heritage.id }
+    val restorationRecord = records.firstOrNull { it.heritageId == heritage.id }
+    val isRestored = restorationRecord != null
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -90,6 +94,16 @@ fun HeritageDetailSheet(
                 Spacer(Modifier.height(8.dp))
             }
 
+            if (isRestored) {
+                Text(
+                    "解鎖於 ${formatUnlockTime(restorationRecord?.restoredAt ?: 0L)}",
+                    fontSize = 13.sp,
+                    color = OrangeAccent,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+
             // ── 名稱 + 描述 ───────────────────────────────────────────────
             Text(heritage.name, fontWeight = FontWeight.Bold, fontSize = 22.sp)
             Spacer(Modifier.height(12.dp))
@@ -126,6 +140,10 @@ fun HeritageDetailSheet(
         }
     }
 }
+
+private fun formatUnlockTime(millis: Long): String =
+    if (millis > 0L) SimpleDateFormat("yyyy/M/d HH:mm", Locale.TAIWAN).format(Date(millis))
+    else "未知時間"
 
 // 已修復：從 assets/photos 載入老照片並顯示
 @Composable

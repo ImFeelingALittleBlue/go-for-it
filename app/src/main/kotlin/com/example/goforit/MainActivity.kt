@@ -12,6 +12,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.goforit.data.RestorationRepository
+import com.example.goforit.data.RouteRepository
 import com.example.goforit.navigation.BottomNavBar
 import com.example.goforit.navigation.Screen
 import com.example.goforit.ui.account.AccountScreen
@@ -25,6 +26,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // 匿名登入 + 開始監聽雲端修復紀錄（App 一啟動就準備好）
         RestorationRepository.start()
+        RouteRepository.start()
         enableEdgeToEdge()
         setContent {
             GoForItTheme {

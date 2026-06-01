@@ -1,7 +1,10 @@
 package com.example.goforit.ui.home
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -13,6 +16,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.goforit.data.Heritage
+import com.example.goforit.data.RestorationRecord
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 // 暫時假資料（組員建好 Room DB 後換成從資料庫讀取）
 // Triple = (名稱, 時期•年份, 是否已解鎖)
@@ -22,6 +30,58 @@ private val sampleSites = listOf(
     Triple("臺南郵便局", "日治時期 • 1915", false),
     Triple("赤崁樓",     "明鄭時期 • 1653", true),
 )
+
+@Composable
+fun RestoredHeritageSection(
+    heritages: List<Heritage>,
+    records: List<RestorationRecord>,
+    onHeritageClick: (Heritage) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val restoredAtById = records.associate { it.heritageId to it.restoredAt }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("已修復古蹟", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "展開", tint = TextGray)
+        }
+
+        LazyRow(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item { StatusChip(text = "已解鎖 ${heritages.size}", active = true) }
+        }
+
+        Spacer(Modifier.height(4.dp))
+
+        if (heritages.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("還沒有已修復古蹟", color = TextGray, fontSize = 14.sp)
+            }
+        } else {
+            LazyColumn {
+                items(heritages, key = { it.id }) { heritage ->
+                    RestoredHeritageItem(
+                        heritage = heritage,
+                        restoredAt = restoredAtById[heritage.id] ?: 0L,
+                        onClick = { onHeritageClick(heritage) }
+                    )
+                    HorizontalDivider(color = ChipBg, thickness = 1.dp)
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun NearbyHeritageSection(modifier: Modifier = Modifier) {
@@ -78,6 +138,40 @@ fun StatusChip(text: String, active: Boolean) {
     }
 }
 
+@Composable
+private fun RestoredHeritageItem(
+    heritage: Heritage,
+    restoredAt: Long,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(heritage.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Spacer(Modifier.height(2.dp))
+            Text("解鎖於 ${formatUnlockTime(restoredAt)}", fontSize = 12.sp, color = TextGray)
+        }
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xFF4CAF50)
+        ) {
+            Text(
+                text = "已解鎖",
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                fontSize = 12.sp,
+                color = Color.White,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
 // 單一古蹟列表項目
 @Composable
 fun HeritageItem(name: String, period: String, unlocked: Boolean) {
@@ -108,3 +202,7 @@ fun HeritageItem(name: String, period: String, unlocked: Boolean) {
         }
     }
 }
+
+private fun formatUnlockTime(millis: Long): String =
+    if (millis > 0L) SimpleDateFormat("M月d日 HH:mm", Locale.TAIWAN).format(Date(millis))
+    else "未知時間"

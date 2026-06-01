@@ -23,11 +23,13 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.example.goforit.data.Heritage
 import com.example.goforit.data.HeritageRepository
+import com.example.goforit.data.RestorationRepository
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.MapView
 import com.mapbox.maps.Style
 import com.mapbox.maps.plugin.annotation.annotations
+import com.mapbox.maps.plugin.annotation.generated.CircleAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.CircleAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.OnCircleAnnotationClickListener
 import com.mapbox.maps.plugin.annotation.generated.createCircleAnnotationManager
@@ -45,6 +47,13 @@ fun HomeScreen() {
 
     // 讀取 CSV 裡的古蹟資料（只在第一次組畫面時讀一次）
     val heritages = remember { HeritageRepository.loadHeritages(context) }
+    val restorationRecords = RestorationRepository.records().toList()
+    val restoredHeritages = restorationRecords.mapNotNull { record ->
+        heritages.firstOrNull { it.id == record.heritageId }
+    }.distinctBy { it.id }
+    var markerManager by remember { mutableStateOf<CircleAnnotationManager?>(null) }
+    val markerLookup = remember { mutableMapOf<String, Heritage>() }
+    var markerClickListenerInstalled by remember { mutableStateOf(false) }
 
     // 地圖跟著 Activity 生命週期啟動 / 暫停 / 銷毀
     DisposableEffect(lifecycleOwner) {
@@ -81,9 +90,6 @@ fun HomeScreen() {
                                     .center(Point.fromLngLat(120.2028, 23.0000))
                                     .zoom(13.0).build()
                             )
-                            // 樣式載入完成後，把所有古蹟畫成磚紅色圓點
-                            // 點到圓點時，把 selected 設成對應古蹟 → 彈出詳情卡
-                            addHeritageMarkers(mapView, heritages) { selected = it }
                         }
                     }
                 },
@@ -92,6 +98,20 @@ fun HomeScreen() {
                     if (locationGranted) {
                         mv.location.updateSettings { enabled = true }
                     }
+                    mv.mapboxMap.getStyle {
+                        val manager = markerManager
+                            ?: mv.annotations.createCircleAnnotationManager().also { markerManager = it }
+                        if (!markerClickListenerInstalled) {
+                            manager.addClickListener(
+                                OnCircleAnnotationClickListener { annotation ->
+                                    markerLookup[annotation.id]?.let { selected = it }
+                                    true
+                                }
+                            )
+                            markerClickListenerInstalled = true
+                        }
+                        setHeritageMarkers(manager, restoredHeritages, markerLookup)
+                    }
                 },
                 modifier = Modifier.fillMaxSize()
             )
@@ -99,8 +119,13 @@ fun HomeScreen() {
             MapOverlayButtons(modifier = Modifier.align(Alignment.BottomCenter))
         }
 
-        // ── 附近古蹟列表（占 45%）────────────────────────────────────────────
-        NearbyHeritageSection(modifier = Modifier.weight(0.45f))
+        // ── 已修復古蹟列表（占 45%）──────────────────────────────────────────
+        RestoredHeritageSection(
+            heritages = restoredHeritages,
+            records = restorationRecords,
+            onHeritageClick = { selected = it },
+            modifier = Modifier.weight(0.45f)
+        )
     }
 
     // ── 古蹟詳情卡：selected 有值才顯示 ──────────────────────────────────────
@@ -109,15 +134,15 @@ fun HomeScreen() {
     }
 }
 
-// 在地圖上把每筆古蹟畫成一個圓點（待修復的古蹟）
+// 在地圖上把每筆已修復古蹟畫成一個圓點。
 // onMarkerClick：點到某個圓點時，把對應的 Heritage 傳回去
-private fun addHeritageMarkers(
-    mapView: MapView,
+private fun setHeritageMarkers(
+    manager: CircleAnnotationManager,
     heritages: List<Heritage>,
-    onMarkerClick: (Heritage) -> Unit
+    markerLookup: MutableMap<String, Heritage>
 ) {
-    // CircleAnnotationManager：MapView 上負責管理一堆圓點標記的工具
-    val manager = mapView.annotations.createCircleAnnotationManager()
+    manager.deleteAll()
+    markerLookup.clear()
     val options = heritages.map { h ->
         CircleAnnotationOptions()
             .withPoint(Point.fromLngLat(h.lng, h.lat))  // 圓點位置
@@ -127,17 +152,8 @@ private fun addHeritageMarkers(
             .withCircleStrokeColor("#FFFFFF")
     }
 
-    // create 回傳的圓點清單，順序跟 heritages 一樣 → 用 id 對應回古蹟
     val created = manager.create(options)
-    val byId = created.zip(heritages).associate { (annotation, h) -> annotation.id to h }
-
-    // 加上點擊監聽：點到圓點 → 找出對應古蹟 → 回傳；return true 表示「已處理這次點擊」
-    manager.addClickListener(
-        OnCircleAnnotationClickListener { annotation ->
-            byId[annotation.id]?.let(onMarkerClick)
-            true
-        }
-    )
+    markerLookup.putAll(created.zip(heritages).associate { (annotation, h) -> annotation.id to h })
 }
 
 @Composable

@@ -18,6 +18,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.example.goforit.data.HeritageRepository
+import com.example.goforit.data.RouteRepository
 import com.example.goforit.ui.home.OrangeAccent
 import com.example.goforit.ui.home.TextGray
 import com.example.goforit.ui.home.rememberLocationPermission
@@ -207,7 +208,11 @@ fun RunScreen() {
                     contentAlignment = Alignment.Center
                 ) {
                     Button(
-                        onClick = { tracker.stop(); phase = RunPhase.PRE_RUN },
+                        onClick = {
+                            RouteRepository.addRun(tracker.points.toList())
+                            tracker.stop()
+                            phase = RunPhase.PRE_RUN
+                        },
                         modifier = Modifier.size(72.dp),
                         shape = RoundedCornerShape(50),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
