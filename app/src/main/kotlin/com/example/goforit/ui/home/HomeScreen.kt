@@ -49,10 +49,14 @@ val OrangeAccent = Color(0xFFD4822A)    // 設計稿主色
 val TextGray     = Color(0xFF888888)
 val ChipBg       = Color(0xFFF0EDE8)
 private const val BUILT_BUILDINGS_SOURCE_ID = "built-heritage-buildings-source"
+private const val BUILT_BUILDINGS_PLAZA_SOURCE_ID = "built-heritage-plazas-source"
 private const val BUILT_BUILDINGS_ROOF_SOURCE_ID = "built-heritage-roofs-source"
+private const val BUILT_BUILDINGS_TOWER_SOURCE_ID = "built-heritage-towers-source"
+private const val BUILT_BUILDINGS_PLAZA_LAYER_ID = "built-heritage-plazas-layer"
 private const val BUILT_BUILDINGS_BODY_LAYER_ID = "built-heritage-buildings-body-layer"
 private const val BUILT_BUILDINGS_ROOF_LAYER_ID = "built-heritage-buildings-roof-layer"
-private const val BUILT_BUILDING_SIZE_METERS = 34.0
+private const val BUILT_BUILDINGS_TOWER_LAYER_ID = "built-heritage-towers-layer"
+private const val BUILT_BUILDING_SIZE_METERS = 145.0
 
 enum class HeritageFilter { ALL, RESTORED, PENDING }
 
@@ -179,7 +183,7 @@ fun HomeScreen() {
             selectedFilter = heritageFilter,
             onFilterChange = { heritageFilter = it },
             onHeritageClick = { selected = it },
-            modifier = Modifier.weight(0.45f)
+            modifier = Modifier.weight(0.70f)
         )
     }
 
@@ -203,16 +207,16 @@ private fun setHeritageMarkers(
     val options = heritages.map { h ->
         CircleAnnotationOptions()
             .withPoint(Point.fromLngLat(h.lng, h.lat))  // 圓點位置
-            .withCircleRadius(if (h.id in builtIds) 11.0 else 8.0)
+            .withCircleRadius(if (h.id in builtIds) 4.0 else 8.0)
             .withCircleColor(
                 when {
-                    h.id in builtIds -> "#9B6A3F"
+                    h.id in builtIds -> "#F7D47A"
                     h.id in restoredIds -> "#4CAF50"
                     else -> "#D4822A"
                 }
             )
-            .withCircleStrokeWidth(if (h.id in builtIds) 3.0 else 2.0)
-            .withCircleStrokeColor("#FFFFFF")
+            .withCircleStrokeWidth(if (h.id in builtIds) 1.5 else 2.0)
+            .withCircleStrokeColor(if (h.id in builtIds) "#C46A2D" else "#FFFFFF")
     }
 
     val created = manager.create(options)
@@ -227,8 +231,17 @@ private fun setBuiltHeritageBuildings(
     if (style.styleLayerExists(BUILT_BUILDINGS_ROOF_LAYER_ID)) {
         style.removeStyleLayer(BUILT_BUILDINGS_ROOF_LAYER_ID)
     }
+    if (style.styleLayerExists(BUILT_BUILDINGS_TOWER_LAYER_ID)) {
+        style.removeStyleLayer(BUILT_BUILDINGS_TOWER_LAYER_ID)
+    }
     if (style.styleLayerExists(BUILT_BUILDINGS_BODY_LAYER_ID)) {
         style.removeStyleLayer(BUILT_BUILDINGS_BODY_LAYER_ID)
+    }
+    if (style.styleLayerExists(BUILT_BUILDINGS_PLAZA_LAYER_ID)) {
+        style.removeStyleLayer(BUILT_BUILDINGS_PLAZA_LAYER_ID)
+    }
+    if (style.styleSourceExists(BUILT_BUILDINGS_TOWER_SOURCE_ID)) {
+        style.removeStyleSource(BUILT_BUILDINGS_TOWER_SOURCE_ID)
     }
     if (style.styleSourceExists(BUILT_BUILDINGS_ROOF_SOURCE_ID)) {
         style.removeStyleSource(BUILT_BUILDINGS_ROOF_SOURCE_ID)
@@ -236,40 +249,69 @@ private fun setBuiltHeritageBuildings(
     if (style.styleSourceExists(BUILT_BUILDINGS_SOURCE_ID)) {
         style.removeStyleSource(BUILT_BUILDINGS_SOURCE_ID)
     }
+    if (style.styleSourceExists(BUILT_BUILDINGS_PLAZA_SOURCE_ID)) {
+        style.removeStyleSource(BUILT_BUILDINGS_PLAZA_SOURCE_ID)
+    }
 
+    geoJsonSource(BUILT_BUILDINGS_PLAZA_SOURCE_ID)
+        .featureCollection(buildBuildingFeatureCollection(builtHeritages, scale, BuildingPart.PLAZA))
+        .bindTo(style)
     geoJsonSource(BUILT_BUILDINGS_SOURCE_ID)
-        .featureCollection(buildBuildingFeatureCollection(builtHeritages, scale, roof = false))
+        .featureCollection(buildBuildingFeatureCollection(builtHeritages, scale, BuildingPart.BODY))
         .bindTo(style)
     geoJsonSource(BUILT_BUILDINGS_ROOF_SOURCE_ID)
-        .featureCollection(buildBuildingFeatureCollection(builtHeritages, scale, roof = true))
+        .featureCollection(buildBuildingFeatureCollection(builtHeritages, scale, BuildingPart.ROOF))
+        .bindTo(style)
+    geoJsonSource(BUILT_BUILDINGS_TOWER_SOURCE_ID)
+        .featureCollection(buildBuildingFeatureCollection(builtHeritages, scale, BuildingPart.TOWER))
         .bindTo(style)
 
-    FillExtrusionLayer(BUILT_BUILDINGS_BODY_LAYER_ID, BUILT_BUILDINGS_SOURCE_ID)
-        .fillExtrusionColor("#B97842")
-        .fillExtrusionHeight(30.0 * scale)
+    FillExtrusionLayer(BUILT_BUILDINGS_PLAZA_LAYER_ID, BUILT_BUILDINGS_PLAZA_SOURCE_ID)
+        .fillExtrusionColor("#FFF0C7")
+        .fillExtrusionHeight(10.0 * scale)
         .fillExtrusionBase(0.0)
         .fillExtrusionOpacity(0.96)
         .fillExtrusionVerticalGradient(true)
-        .minZoom(12.0)
+        .minZoom(10.8)
+        .bindTo(style)
+
+    FillExtrusionLayer(BUILT_BUILDINGS_BODY_LAYER_ID, BUILT_BUILDINGS_SOURCE_ID)
+        .fillExtrusionColor("#FF9F5A")
+        .fillExtrusionHeight(122.0 * scale)
+        .fillExtrusionBase(10.0 * scale)
+        .fillExtrusionOpacity(0.96)
+        .fillExtrusionVerticalGradient(true)
+        .minZoom(10.8)
         .bindTo(style)
 
     FillExtrusionLayer(BUILT_BUILDINGS_ROOF_LAYER_ID, BUILT_BUILDINGS_ROOF_SOURCE_ID)
-        .fillExtrusionColor("#E6C06D")
-        .fillExtrusionHeight(45.0 * scale)
-        .fillExtrusionBase(30.0 * scale)
+        .fillExtrusionColor("#FFE36D")
+        .fillExtrusionHeight(176.0 * scale)
+        .fillExtrusionBase(122.0 * scale)
         .fillExtrusionOpacity(0.98)
         .fillExtrusionVerticalGradient(true)
-        .minZoom(12.0)
+        .minZoom(10.8)
+        .bindTo(style)
+
+    FillExtrusionLayer(BUILT_BUILDINGS_TOWER_LAYER_ID, BUILT_BUILDINGS_TOWER_SOURCE_ID)
+        .fillExtrusionColor("#FF6F61")
+        .fillExtrusionHeight(226.0 * scale)
+        .fillExtrusionBase(122.0 * scale)
+        .fillExtrusionOpacity(0.98)
+        .fillExtrusionVerticalGradient(true)
+        .minZoom(10.8)
         .bindTo(style)
 }
+
+private enum class BuildingPart { PLAZA, BODY, ROOF, TOWER }
 
 private fun buildBuildingFeatureCollection(
     heritages: List<Heritage>,
     scale: Float,
-    roof: Boolean
+    part: BuildingPart
 ): FeatureCollection {
     val features = heritages.map { heritage ->
-        Feature.fromGeometry(buildFootprint(heritage, scale = scale, roof = roof))
+        Feature.fromGeometry(buildFootprint(heritage, scale = scale, part = part))
     }
     return FeatureCollection.fromFeatures(features)
 }
@@ -277,19 +319,43 @@ private fun buildBuildingFeatureCollection(
 private fun buildFootprint(
     heritage: Heritage,
     scale: Float,
-    roof: Boolean
+    part: BuildingPart
 ): Polygon {
-    val size = BUILT_BUILDING_SIZE_METERS * scale * if (roof) 0.58 else 1.0
+    val partScale = when (part) {
+        BuildingPart.PLAZA -> 1.36
+        BuildingPart.BODY -> 1.0
+        BuildingPart.ROOF -> 0.62
+        BuildingPart.TOWER -> 0.28
+    }
+    val size = BUILT_BUILDING_SIZE_METERS * scale * partScale
     val variant = heritage.id % 5
-    val offsets = when (variant) {
-        0 -> listOf(-0.65 to -0.42, 0.65 to -0.42, 0.65 to 0.42, -0.65 to 0.42)
-        1 -> listOf(0.0 to -0.62, 0.62 to 0.0, 0.0 to 0.62, -0.62 to 0.0)
+    val baseOffsets = when (variant) {
+        0 -> listOf(-0.74 to -0.44, 0.74 to -0.44, 0.74 to 0.44, -0.74 to 0.44)
+        1 -> listOf(0.0 to -0.72, 0.72 to 0.0, 0.0 to 0.72, -0.72 to 0.0)
         2 -> (0 until 8).map { i ->
             val angle = PI * 2.0 * i / 8.0 + PI / 8.0
-            cos(angle) * 0.58 to sin(angle) * 0.58
+            cos(angle) * 0.68 to sin(angle) * 0.68
         }
-        3 -> listOf(-0.62 to -0.62, 0.62 to -0.62, 0.62 to -0.12, 0.12 to -0.12, 0.12 to 0.62, -0.62 to 0.62)
-        else -> listOf(-0.42 to -0.68, 0.42 to -0.68, 0.58 to 0.0, 0.42 to 0.68, -0.42 to 0.68, -0.58 to 0.0)
+        3 -> listOf(-0.72 to -0.72, 0.72 to -0.72, 0.72 to -0.18, 0.18 to -0.18, 0.18 to 0.72, -0.72 to 0.72)
+        else -> listOf(-0.46 to -0.78, 0.46 to -0.78, 0.68 to 0.0, 0.46 to 0.78, -0.46 to 0.78, -0.68 to 0.0)
+    }
+    val offsets = when (part) {
+        BuildingPart.PLAZA -> baseOffsets
+        BuildingPart.BODY -> baseOffsets
+        BuildingPart.ROOF -> baseOffsets.map { (x, y) -> x * 0.72 to y * 0.72 }
+        BuildingPart.TOWER -> {
+            val towerCenter = when (variant) {
+                0 -> 0.34 to -0.18
+                1 -> 0.0 to -0.34
+                2 -> 0.24 to 0.24
+                3 -> -0.28 to -0.28
+                else -> -0.18 to 0.28
+            }
+            (0 until 6).map { i ->
+                val angle = PI * 2.0 * i / 6.0 + PI / 6.0
+                towerCenter.first + cos(angle) * 0.5 to towerCenter.second + sin(angle) * 0.5
+            }
+        }
     }
     val ring = offsets.map { (x, y) ->
         metersToPoint(heritage.lng, heritage.lat, eastMeters = x * size, northMeters = y * size)
