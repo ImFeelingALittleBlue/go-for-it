@@ -39,6 +39,8 @@ val OrangeAccent = Color(0xFFD4822A)    // 設計稿主色
 val TextGray     = Color(0xFF888888)
 val ChipBg       = Color(0xFFF0EDE8)
 
+enum class HeritageFilter { ALL, RESTORED, PENDING }
+
 @Composable
 fun HomeScreen() {
     val context        = LocalContext.current
@@ -48,9 +50,13 @@ fun HomeScreen() {
     // 讀取 CSV 裡的古蹟資料（只在第一次組畫面時讀一次）
     val heritages = remember { HeritageRepository.loadHeritages(context) }
     val restorationRecords = RestorationRepository.records().toList()
-    val restoredHeritages = restorationRecords.mapNotNull { record ->
-        heritages.firstOrNull { it.id == record.heritageId }
-    }.distinctBy { it.id }
+    val restoredIds = restorationRecords.map { it.heritageId }.toSet()
+    var heritageFilter by remember { mutableStateOf(HeritageFilter.ALL) }
+    val visibleHeritages = when (heritageFilter) {
+        HeritageFilter.ALL -> heritages
+        HeritageFilter.RESTORED -> heritages.filter { it.id in restoredIds }
+        HeritageFilter.PENDING -> heritages.filter { it.id !in restoredIds }
+    }
     var markerManager by remember { mutableStateOf<CircleAnnotationManager?>(null) }
     val markerLookup = remember { mutableMapOf<String, Heritage>() }
     var markerClickListenerInstalled by remember { mutableStateOf(false) }
@@ -110,7 +116,7 @@ fun HomeScreen() {
                             )
                             markerClickListenerInstalled = true
                         }
-                        setHeritageMarkers(manager, restoredHeritages, markerLookup)
+                        setHeritageMarkers(manager, visibleHeritages, restoredIds, markerLookup)
                     }
                 },
                 modifier = Modifier.fillMaxSize()
@@ -119,10 +125,12 @@ fun HomeScreen() {
             MapOverlayButtons(modifier = Modifier.align(Alignment.BottomCenter))
         }
 
-        // ── 已修復古蹟列表（占 45%）──────────────────────────────────────────
-        RestoredHeritageSection(
-            heritages = restoredHeritages,
+        // ── 全部古蹟列表（占 45%）：用狀態區分已修復 / 待修復 ───────────────
+        MapHeritageSection(
+            heritages = heritages,
             records = restorationRecords,
+            selectedFilter = heritageFilter,
+            onFilterChange = { heritageFilter = it },
             onHeritageClick = { selected = it },
             modifier = Modifier.weight(0.45f)
         )
@@ -134,11 +142,12 @@ fun HomeScreen() {
     }
 }
 
-// 在地圖上把每筆已修復古蹟畫成一個圓點。
+// 在地圖上把所有古蹟畫成圓點，已修復 / 待修復使用不同顏色。
 // onMarkerClick：點到某個圓點時，把對應的 Heritage 傳回去
 private fun setHeritageMarkers(
     manager: CircleAnnotationManager,
     heritages: List<Heritage>,
+    restoredIds: Set<Int>,
     markerLookup: MutableMap<String, Heritage>
 ) {
     manager.deleteAll()
@@ -147,7 +156,7 @@ private fun setHeritageMarkers(
         CircleAnnotationOptions()
             .withPoint(Point.fromLngLat(h.lng, h.lat))  // 圓點位置
             .withCircleRadius(8.0)                        // 半徑（大一點比較好點）
-            .withCircleColor("#B5651D")                   // 磚紅色
+            .withCircleColor(if (h.id in restoredIds) "#4CAF50" else "#D4822A")
             .withCircleStrokeWidth(2.0)                   // 白色外框
             .withCircleStrokeColor("#FFFFFF")
     }

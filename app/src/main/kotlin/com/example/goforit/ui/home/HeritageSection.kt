@@ -32,13 +32,22 @@ private val sampleSites = listOf(
 )
 
 @Composable
-fun RestoredHeritageSection(
+fun MapHeritageSection(
     heritages: List<Heritage>,
     records: List<RestorationRecord>,
+    selectedFilter: HeritageFilter,
+    onFilterChange: (HeritageFilter) -> Unit,
     onHeritageClick: (Heritage) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val restoredAtById = records.associate { it.heritageId to it.restoredAt }
+    val restoredCount = heritages.count { it.id in restoredAtById }
+    val pendingCount = heritages.size - restoredCount
+    val filteredHeritages = when (selectedFilter) {
+        HeritageFilter.ALL -> heritages
+        HeritageFilter.RESTORED -> heritages.filter { it.id in restoredAtById }
+        HeritageFilter.PENDING -> heritages.filter { it.id !in restoredAtById }
+    }
 
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -48,7 +57,7 @@ fun RestoredHeritageSection(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("已修復古蹟", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text("古蹟與遺址", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Icon(Icons.Default.KeyboardArrowDown, contentDescription = "展開", tint = TextGray)
         }
 
@@ -56,22 +65,44 @@ fun RestoredHeritageSection(
             modifier = Modifier.padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item { StatusChip(text = "已解鎖 ${heritages.size}", active = true) }
+            item {
+                StatusChip(
+                    text = "全部 ${heritages.size}",
+                    active = selectedFilter == HeritageFilter.ALL,
+                    onClick = { onFilterChange(HeritageFilter.ALL) }
+                )
+            }
+            item {
+                StatusChip(
+                    text = "已修復 $restoredCount",
+                    active = selectedFilter == HeritageFilter.RESTORED,
+                    indicatorColor = Color(0xFF4CAF50),
+                    onClick = { onFilterChange(HeritageFilter.RESTORED) }
+                )
+            }
+            item {
+                StatusChip(
+                    text = "待修復 $pendingCount",
+                    active = selectedFilter == HeritageFilter.PENDING,
+                    indicatorColor = OrangeAccent,
+                    onClick = { onFilterChange(HeritageFilter.PENDING) }
+                )
+            }
         }
 
         Spacer(Modifier.height(4.dp))
 
-        if (heritages.isEmpty()) {
+        if (filteredHeritages.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize().padding(24.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text("還沒有已修復古蹟", color = TextGray, fontSize = 14.sp)
+                Text("沒有符合條件的古蹟", color = TextGray, fontSize = 14.sp)
             }
         } else {
             LazyColumn {
-                items(heritages, key = { it.id }) { heritage ->
-                    RestoredHeritageItem(
+                items(filteredHeritages, key = { it.id }) { heritage ->
+                    MapHeritageItem(
                         heritage = heritage,
                         restoredAt = restoredAtById[heritage.id] ?: 0L,
                         onClick = { onHeritageClick(heritage) }
@@ -81,6 +112,23 @@ fun RestoredHeritageSection(
             }
         }
     }
+}
+
+@Composable
+fun RestoredHeritageSection(
+    heritages: List<Heritage>,
+    records: List<RestorationRecord>,
+    onHeritageClick: (Heritage) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    MapHeritageSection(
+        heritages = heritages,
+        records = records,
+        selectedFilter = HeritageFilter.RESTORED,
+        onFilterChange = {},
+        onHeritageClick = onHeritageClick,
+        modifier = modifier
+    )
 }
 
 @Composable
@@ -124,26 +172,45 @@ fun NearbyHeritageSection(modifier: Modifier = Modifier) {
 
 // 篩選標籤元件
 @Composable
-fun StatusChip(text: String, active: Boolean) {
+fun StatusChip(
+    text: String,
+    active: Boolean,
+    indicatorColor: Color? = null,
+    onClick: (() -> Unit)? = null
+) {
     Surface(
+        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
         shape = RoundedCornerShape(16.dp),
         color = if (active) OrangeAccent else ChipBg
     ) {
-        Text(
-            text = text,
+        Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            fontSize = 12.sp,
-            color = if (active) Color.White else Color(0xFF1A1A1A)
-        )
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (indicatorColor != null) {
+                Surface(
+                    modifier = Modifier.size(8.dp),
+                    shape = RoundedCornerShape(50),
+                    color = indicatorColor
+                ) {}
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(
+                text = text,
+                fontSize = 12.sp,
+                color = if (active) Color.White else Color(0xFF1A1A1A)
+            )
+        }
     }
 }
 
 @Composable
-private fun RestoredHeritageItem(
+private fun MapHeritageItem(
     heritage: Heritage,
     restoredAt: Long,
     onClick: () -> Unit
 ) {
+    val restored = restoredAt > 0L
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -155,14 +222,18 @@ private fun RestoredHeritageItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(heritage.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
             Spacer(Modifier.height(2.dp))
-            Text("解鎖於 ${formatUnlockTime(restoredAt)}", fontSize = 12.sp, color = TextGray)
+            Text(
+                if (restored) "解鎖於 ${formatUnlockTime(restoredAt)}" else heritage.year.ifBlank { "待修復" },
+                fontSize = 12.sp,
+                color = TextGray
+            )
         }
         Surface(
             shape = RoundedCornerShape(16.dp),
-            color = Color(0xFF4CAF50)
+            color = if (restored) Color(0xFF4CAF50) else OrangeAccent
         ) {
             Text(
-                text = "已解鎖",
+                text = if (restored) "已修復" else "待修復",
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 fontSize = 12.sp,
                 color = Color.White,
