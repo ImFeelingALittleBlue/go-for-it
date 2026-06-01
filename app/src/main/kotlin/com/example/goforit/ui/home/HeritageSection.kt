@@ -35,6 +35,7 @@ private val sampleSites = listOf(
 fun MapHeritageSection(
     heritages: List<Heritage>,
     records: List<RestorationRecord>,
+    builtIds: Set<Int>,
     selectedFilter: HeritageFilter,
     onFilterChange: (HeritageFilter) -> Unit,
     onHeritageClick: (Heritage) -> Unit,
@@ -43,6 +44,7 @@ fun MapHeritageSection(
     val restoredAtById = records.associate { it.heritageId to it.restoredAt }
     val restoredCount = heritages.count { it.id in restoredAtById }
     val pendingCount = heritages.size - restoredCount
+    val builtCount = heritages.count { it.id in builtIds }
     val filteredHeritages = when (selectedFilter) {
         HeritageFilter.ALL -> heritages
         HeritageFilter.RESTORED -> heritages.filter { it.id in restoredAtById }
@@ -88,6 +90,13 @@ fun MapHeritageSection(
                     onClick = { onFilterChange(HeritageFilter.PENDING) }
                 )
             }
+            item {
+                StatusChip(
+                    text = "已創建 $builtCount",
+                    active = false,
+                    indicatorColor = Color(0xFF9B6A3F)
+                )
+            }
         }
 
         Spacer(Modifier.height(4.dp))
@@ -105,6 +114,7 @@ fun MapHeritageSection(
                     MapHeritageItem(
                         heritage = heritage,
                         restoredAt = restoredAtById[heritage.id] ?: 0L,
+                        isBuilt = heritage.id in builtIds,
                         onClick = { onHeritageClick(heritage) }
                     )
                     HorizontalDivider(color = ChipBg, thickness = 1.dp)
@@ -124,6 +134,7 @@ fun RestoredHeritageSection(
     MapHeritageSection(
         heritages = heritages,
         records = records,
+        builtIds = emptySet(),
         selectedFilter = HeritageFilter.RESTORED,
         onFilterChange = {},
         onHeritageClick = onHeritageClick,
@@ -208,6 +219,7 @@ fun StatusChip(
 private fun MapHeritageItem(
     heritage: Heritage,
     restoredAt: Long,
+    isBuilt: Boolean,
     onClick: () -> Unit
 ) {
     val restored = restoredAt > 0L
@@ -223,17 +235,29 @@ private fun MapHeritageItem(
             Text(heritage.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
             Spacer(Modifier.height(2.dp))
             Text(
-                if (restored) "解鎖於 ${formatUnlockTime(restoredAt)}" else heritage.year.ifBlank { "待修復" },
+                when {
+                    isBuilt -> "已創建於我的地圖"
+                    restored -> "解鎖於 ${formatUnlockTime(restoredAt)}"
+                    else -> heritage.year.ifBlank { "待修復" }
+                },
                 fontSize = 12.sp,
                 color = TextGray
             )
         }
         Surface(
             shape = RoundedCornerShape(16.dp),
-            color = if (restored) Color(0xFF4CAF50) else OrangeAccent
+            color = when {
+                isBuilt -> Color(0xFF9B6A3F)
+                restored -> Color(0xFF4CAF50)
+                else -> OrangeAccent
+            }
         ) {
             Text(
-                text = if (restored) "已修復" else "待修復",
+                text = when {
+                    isBuilt -> "已創建"
+                    restored -> "已解鎖"
+                    else -> "待修復"
+                },
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 fontSize = 12.sp,
                 color = Color.White,

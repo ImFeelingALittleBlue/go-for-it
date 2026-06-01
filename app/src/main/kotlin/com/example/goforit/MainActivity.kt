@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.goforit.data.MapBuildRepository
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.RouteRepository
 import com.example.goforit.navigation.BottomNavBar
@@ -27,6 +28,7 @@ class MainActivity : ComponentActivity() {
         // 匿名登入 + 開始監聽雲端修復紀錄（App 一啟動就準備好）
         RestorationRepository.start()
         RouteRepository.start()
+        MapBuildRepository.start()
         enableEdgeToEdge()
         setContent {
             GoForItTheme {

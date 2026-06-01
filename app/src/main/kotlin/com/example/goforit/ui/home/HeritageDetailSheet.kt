@@ -8,6 +8,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -24,14 +25,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.goforit.data.Heritage
+import com.example.goforit.data.MapBuildRepository
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.SilverSaltStore
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// 修復一座古蹟需要的時光銀鹽點數
-private const val RESTORE_COST = 100
+// 在地圖上創建 2.5D 建築需要的時光銀鹽點數
+private const val BUILD_COST = 100
 
 // 古蹟詳情卡（從底部彈出）
 // 依「是否已修復」切換：未修復顯示鎖住畫面+修復按鈕；已修復顯示老照片
@@ -48,6 +50,7 @@ fun HeritageDetailSheet(
     val records = RestorationRepository.records()
     val restorationRecord = records.firstOrNull { it.heritageId == heritage.id }
     val isRestored = restorationRecord != null
+    val isBuilt = MapBuildRepository.records().any { it.heritageId == heritage.id }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -63,7 +66,11 @@ fun HeritageDetailSheet(
                 color = if (isRestored) Color(0xFF4CAF50) else Color(0xFF2C2C2C)
             ) {
                 Text(
-                    if (isRestored) "✓ 已修復" else "✕ 未解鎖",
+                    when {
+                        isBuilt -> "✓ 已創建"
+                        isRestored -> "! 已解鎖"
+                        else -> "X 未解鎖"
+                    },
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                     color = Color.White,
                     fontSize = 12.sp
@@ -116,26 +123,66 @@ fun HeritageDetailSheet(
 
             Spacer(Modifier.height(20.dp))
 
-            // ── 修復按鈕（已修復就不再顯示）─────────────────────────────────
-            if (!isRestored) {
-                val enough = points >= RESTORE_COST
-                Button(
-                    onClick = {
-                        // 先扣點數，扣成功才寫一筆修復紀錄到雲端
-                        if (SilverSaltStore.spend(context, RESTORE_COST)) {
-                            RestorationRepository.add(heritage)
-                        }
-                    },
-                    enabled = enough,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp)
-                ) {
-                    Text(
-                        if (enough) "修復古蹟（花費 $RESTORE_COST 銀鹽）"
-                        else "銀鹽不足（需 $RESTORE_COST，目前 $points）",
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
+            HeritageActionButton(
+                isRestored = isRestored,
+                isBuilt = isBuilt,
+                points = points,
+                onBuild = {
+                    if (SilverSaltStore.spend(context, BUILD_COST)) {
+                        MapBuildRepository.add(heritage)
+                    }
                 }
+            )
+        }
+    }
+}
+
+@Composable
+private fun HeritageActionButton(
+    isRestored: Boolean,
+    isBuilt: Boolean,
+    points: Int,
+    onBuild: () -> Unit
+) {
+    when {
+        !isRestored -> {
+            Button(
+                onClick = {},
+                enabled = false,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(disabledContainerColor = Color(0xFFC9C9C9))
+            ) {
+                Text("前往探索以解鎖舊照片", modifier = Modifier.padding(vertical = 4.dp))
+            }
+        }
+        isBuilt -> {
+            Button(
+                onClick = {},
+                enabled = false,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(disabledContainerColor = Color(0xFF9B6A3F))
+            ) {
+                Icon(Icons.Default.Business, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("已創建於我的地圖", modifier = Modifier.padding(vertical = 4.dp))
+            }
+        }
+        else -> {
+            val enough = points >= BUILD_COST
+            Button(
+                onClick = onBuild,
+                enabled = enough,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9B6A3F))
+            ) {
+                Text(
+                    if (enough) "創建我的地圖（花費 $BUILD_COST 銀鹽）"
+                    else "銀鹽不足（需 $BUILD_COST，目前 $points）",
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
             }
         }
     }

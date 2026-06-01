@@ -23,6 +23,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.example.goforit.data.Heritage
 import com.example.goforit.data.HeritageRepository
+import com.example.goforit.data.MapBuildRepository
 import com.example.goforit.data.RestorationRepository
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
@@ -51,6 +52,8 @@ fun HomeScreen() {
     val heritages = remember { HeritageRepository.loadHeritages(context) }
     val restorationRecords = RestorationRepository.records().toList()
     val restoredIds = restorationRecords.map { it.heritageId }.toSet()
+    val buildRecords = MapBuildRepository.records().toList()
+    val builtIds = buildRecords.map { it.heritageId }.toSet()
     var heritageFilter by remember { mutableStateOf(HeritageFilter.ALL) }
     val visibleHeritages = when (heritageFilter) {
         HeritageFilter.ALL -> heritages
@@ -116,7 +119,7 @@ fun HomeScreen() {
                             )
                             markerClickListenerInstalled = true
                         }
-                        setHeritageMarkers(manager, visibleHeritages, restoredIds, markerLookup)
+                        setHeritageMarkers(manager, visibleHeritages, restoredIds, builtIds, markerLookup)
                     }
                 },
                 modifier = Modifier.fillMaxSize()
@@ -129,6 +132,7 @@ fun HomeScreen() {
         MapHeritageSection(
             heritages = heritages,
             records = restorationRecords,
+            builtIds = builtIds,
             selectedFilter = heritageFilter,
             onFilterChange = { heritageFilter = it },
             onHeritageClick = { selected = it },
@@ -148,6 +152,7 @@ private fun setHeritageMarkers(
     manager: CircleAnnotationManager,
     heritages: List<Heritage>,
     restoredIds: Set<Int>,
+    builtIds: Set<Int>,
     markerLookup: MutableMap<String, Heritage>
 ) {
     manager.deleteAll()
@@ -155,9 +160,15 @@ private fun setHeritageMarkers(
     val options = heritages.map { h ->
         CircleAnnotationOptions()
             .withPoint(Point.fromLngLat(h.lng, h.lat))  // 圓點位置
-            .withCircleRadius(8.0)                        // 半徑（大一點比較好點）
-            .withCircleColor(if (h.id in restoredIds) "#4CAF50" else "#D4822A")
-            .withCircleStrokeWidth(2.0)                   // 白色外框
+            .withCircleRadius(if (h.id in builtIds) 11.0 else 8.0)
+            .withCircleColor(
+                when {
+                    h.id in builtIds -> "#9B6A3F"
+                    h.id in restoredIds -> "#4CAF50"
+                    else -> "#D4822A"
+                }
+            )
+            .withCircleStrokeWidth(if (h.id in builtIds) 3.0 else 2.0)
             .withCircleStrokeColor("#FFFFFF")
     }
 
