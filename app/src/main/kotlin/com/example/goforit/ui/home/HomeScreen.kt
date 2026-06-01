@@ -25,20 +25,34 @@ import com.example.goforit.data.Heritage
 import com.example.goforit.data.HeritageRepository
 import com.example.goforit.data.MapBuildRepository
 import com.example.goforit.data.RestorationRepository
+import com.mapbox.geojson.Feature
+import com.mapbox.geojson.FeatureCollection
 import com.mapbox.geojson.Point
+import com.mapbox.geojson.Polygon
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.MapView
 import com.mapbox.maps.Style
+import com.mapbox.maps.extension.style.layers.generated.FillExtrusionLayer
+import com.mapbox.maps.extension.style.sources.generated.geoJsonSource
 import com.mapbox.maps.plugin.annotation.annotations
 import com.mapbox.maps.plugin.annotation.generated.CircleAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.CircleAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.OnCircleAnnotationClickListener
 import com.mapbox.maps.plugin.annotation.generated.createCircleAnnotationManager
 import com.mapbox.maps.plugin.locationcomponent.location
+import kotlinx.coroutines.delay
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 val OrangeAccent = Color(0xFFD4822A)    // 設計稿主色
 val TextGray     = Color(0xFF888888)
 val ChipBg       = Color(0xFFF0EDE8)
+private const val BUILT_BUILDINGS_SOURCE_ID = "built-heritage-buildings-source"
+private const val BUILT_BUILDINGS_ROOF_SOURCE_ID = "built-heritage-roofs-source"
+private const val BUILT_BUILDINGS_BODY_LAYER_ID = "built-heritage-buildings-body-layer"
+private const val BUILT_BUILDINGS_ROOF_LAYER_ID = "built-heritage-buildings-roof-layer"
+private const val BUILT_BUILDING_SIZE_METERS = 34.0
 
 enum class HeritageFilter { ALL, RESTORED, PENDING }
 
@@ -63,6 +77,8 @@ fun HomeScreen() {
     var markerManager by remember { mutableStateOf<CircleAnnotationManager?>(null) }
     val markerLookup = remember { mutableMapOf<String, Heritage>() }
     var markerClickListenerInstalled by remember { mutableStateOf(false) }
+    var buildingScale by remember { mutableFloatStateOf(1f) }
+    var knownBuiltIds by remember { mutableStateOf<Set<Int>?>(null) }
 
     // 地圖跟著 Activity 生命週期啟動 / 暫停 / 銷毀
     DisposableEffect(lifecycleOwner) {
@@ -82,6 +98,25 @@ fun HomeScreen() {
     // 目前被點選的古蹟（null = 沒有點任何古蹟，不顯示詳情卡）
     var selected by remember { mutableStateOf<Heritage?>(null) }
 
+    LaunchedEffect(builtIds) {
+        val known = knownBuiltIds
+        if (known == null) {
+            knownBuiltIds = builtIds
+            return@LaunchedEffect
+        }
+        val newlyBuilt = builtIds - known
+        knownBuiltIds = builtIds
+        if (newlyBuilt.isNotEmpty()) {
+            val frames = 24
+            for (frame in 0..frames) {
+                val t = frame / frames.toFloat()
+                buildingScale = (0.22f + 0.9f * easeOutBack(t)).coerceIn(0.22f, 1.12f)
+                delay(16L)
+            }
+            buildingScale = 1f
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxSize().background(Color.White)
     ) {
@@ -97,7 +132,10 @@ fun HomeScreen() {
                             mapboxMap.setCamera(
                                 CameraOptions.Builder()
                                     .center(Point.fromLngLat(120.2028, 23.0000))
-                                    .zoom(13.0).build()
+                                    .zoom(13.0)
+                                    .pitch(48.0)
+                                    .bearing(-18.0)
+                                    .build()
                             )
                         }
                     }
@@ -119,6 +157,11 @@ fun HomeScreen() {
                             )
                             markerClickListenerInstalled = true
                         }
+                        setBuiltHeritageBuildings(
+                            style = it,
+                            builtHeritages = visibleHeritages.filter { heritage -> heritage.id in builtIds },
+                            scale = buildingScale
+                        )
                         setHeritageMarkers(manager, visibleHeritages, restoredIds, builtIds, markerLookup)
                     }
                 },
@@ -174,6 +217,105 @@ private fun setHeritageMarkers(
 
     val created = manager.create(options)
     markerLookup.putAll(created.zip(heritages).associate { (annotation, h) -> annotation.id to h })
+}
+
+private fun setBuiltHeritageBuildings(
+    style: Style,
+    builtHeritages: List<Heritage>,
+    scale: Float
+) {
+    if (style.styleLayerExists(BUILT_BUILDINGS_ROOF_LAYER_ID)) {
+        style.removeStyleLayer(BUILT_BUILDINGS_ROOF_LAYER_ID)
+    }
+    if (style.styleLayerExists(BUILT_BUILDINGS_BODY_LAYER_ID)) {
+        style.removeStyleLayer(BUILT_BUILDINGS_BODY_LAYER_ID)
+    }
+    if (style.styleSourceExists(BUILT_BUILDINGS_ROOF_SOURCE_ID)) {
+        style.removeStyleSource(BUILT_BUILDINGS_ROOF_SOURCE_ID)
+    }
+    if (style.styleSourceExists(BUILT_BUILDINGS_SOURCE_ID)) {
+        style.removeStyleSource(BUILT_BUILDINGS_SOURCE_ID)
+    }
+
+    geoJsonSource(BUILT_BUILDINGS_SOURCE_ID)
+        .featureCollection(buildBuildingFeatureCollection(builtHeritages, scale, roof = false))
+        .bindTo(style)
+    geoJsonSource(BUILT_BUILDINGS_ROOF_SOURCE_ID)
+        .featureCollection(buildBuildingFeatureCollection(builtHeritages, scale, roof = true))
+        .bindTo(style)
+
+    FillExtrusionLayer(BUILT_BUILDINGS_BODY_LAYER_ID, BUILT_BUILDINGS_SOURCE_ID)
+        .fillExtrusionColor("#B97842")
+        .fillExtrusionHeight(30.0 * scale)
+        .fillExtrusionBase(0.0)
+        .fillExtrusionOpacity(0.96)
+        .fillExtrusionVerticalGradient(true)
+        .minZoom(12.0)
+        .bindTo(style)
+
+    FillExtrusionLayer(BUILT_BUILDINGS_ROOF_LAYER_ID, BUILT_BUILDINGS_ROOF_SOURCE_ID)
+        .fillExtrusionColor("#E6C06D")
+        .fillExtrusionHeight(45.0 * scale)
+        .fillExtrusionBase(30.0 * scale)
+        .fillExtrusionOpacity(0.98)
+        .fillExtrusionVerticalGradient(true)
+        .minZoom(12.0)
+        .bindTo(style)
+}
+
+private fun buildBuildingFeatureCollection(
+    heritages: List<Heritage>,
+    scale: Float,
+    roof: Boolean
+): FeatureCollection {
+    val features = heritages.map { heritage ->
+        Feature.fromGeometry(buildFootprint(heritage, scale = scale, roof = roof))
+    }
+    return FeatureCollection.fromFeatures(features)
+}
+
+private fun buildFootprint(
+    heritage: Heritage,
+    scale: Float,
+    roof: Boolean
+): Polygon {
+    val size = BUILT_BUILDING_SIZE_METERS * scale * if (roof) 0.58 else 1.0
+    val variant = heritage.id % 5
+    val offsets = when (variant) {
+        0 -> listOf(-0.65 to -0.42, 0.65 to -0.42, 0.65 to 0.42, -0.65 to 0.42)
+        1 -> listOf(0.0 to -0.62, 0.62 to 0.0, 0.0 to 0.62, -0.62 to 0.0)
+        2 -> (0 until 8).map { i ->
+            val angle = PI * 2.0 * i / 8.0 + PI / 8.0
+            cos(angle) * 0.58 to sin(angle) * 0.58
+        }
+        3 -> listOf(-0.62 to -0.62, 0.62 to -0.62, 0.62 to -0.12, 0.12 to -0.12, 0.12 to 0.62, -0.62 to 0.62)
+        else -> listOf(-0.42 to -0.68, 0.42 to -0.68, 0.58 to 0.0, 0.42 to 0.68, -0.42 to 0.68, -0.58 to 0.0)
+    }
+    val ring = offsets.map { (x, y) ->
+        metersToPoint(heritage.lng, heritage.lat, eastMeters = x * size, northMeters = y * size)
+    }.let { it + it.first() }
+    return Polygon.fromLngLats(listOf(ring))
+}
+
+private fun metersToPoint(
+    lng: Double,
+    lat: Double,
+    eastMeters: Double,
+    northMeters: Double
+): Point {
+    val lngPerMeter = 1.0 / (111_320.0 * cos(Math.toRadians(lat)).coerceAtLeast(0.2))
+    val latPerMeter = 1.0 / 111_320.0
+    return Point.fromLngLat(
+        lng + eastMeters * lngPerMeter,
+        lat + northMeters * latPerMeter
+    )
+}
+
+private fun easeOutBack(t: Float): Float {
+    val c1 = 1.70158f
+    val c3 = c1 + 1f
+    val x = t - 1f
+    return 1f + c3 * x * x * x + c1 * x * x
 }
 
 @Composable
