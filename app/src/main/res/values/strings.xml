@@ -5,4 +5,12 @@
         mapbox_access_token 由 build.gradle.kts 的 resValue 在編譯時注入
         實際金鑰存放在 local.properties（不上傳 git）
     -->
+
+    <!--
+        Google 登入用的「Web 用戶端 ID」。
+        在 Firebase 主控台啟用 Google 登入後，到「專案設定」或重新下載的
+        google-services.json 裡找 client_type=3 的 client_id，
+        格式像 123456789-xxxx.apps.googleusercontent.com，貼到下面取代佔位字串。
+    -->
+    <string name="web_client_id">501638727188-8jfrb64h9tq3ucii4dkm1emvukj6rv9a.apps.googleusercontent.com</string>
 </resources>

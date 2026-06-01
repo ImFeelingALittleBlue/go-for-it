@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.goforit.data.AuthRepository
 import com.example.goforit.data.SilverSaltStore
 
 // 帳號頁：顯示目前的「時光銀鹽」點數
@@ -33,7 +34,13 @@ fun AccountScreen() {
     ) {
         Text("我的帳號", fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
-        Text("探索越多，沖洗越多", fontSize = 13.sp, color = Color(0xFF888888))
+        // 顯示目前登入的 Google 帳號（沒名字就顯示 email）
+        val user = AuthRepository.user
+        Text(
+            user?.displayName ?: user?.email ?: "探索越多，沖洗越多",
+            fontSize = 13.sp,
+            color = Color(0xFF888888)
+        )
 
         Spacer(Modifier.height(20.dp))
 
@@ -70,6 +77,17 @@ fun AccountScreen() {
             shape = RoundedCornerShape(24.dp)
         ) {
             Text("賺取 +10（測試用）", modifier = Modifier.padding(vertical = 4.dp))
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // ── 登出：登出後 MainActivity 會自動切回登入頁 ──────────────────────────
+        OutlinedButton(
+            onClick = { AuthRepository.signOut() },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp)
+        ) {
+            Text("登出", modifier = Modifier.padding(vertical = 4.dp))
         }
     }
 }

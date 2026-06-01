@@ -95,6 +95,11 @@ dependencies {
     implementation("com.google.firebase:firebase-storage-ktx")    // 音檔雲端儲存
     implementation("com.google.firebase:firebase-functions-ktx")  // 呼叫 Claude API 的後端
 
+    // ── Google 登入（Credential Manager，Google 官方現行做法）─────────────────
+    implementation("androidx.credentials:credentials:1.3.0")               // 統一的憑證管理介面
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0") // 接 Google Play 服務
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1") // 解析 Google 身分權杖
+
     // ── Mapbox 地圖 ──────────────────────────────────────────────────────────
     implementation("com.mapbox.maps:android:11.9.0")
 

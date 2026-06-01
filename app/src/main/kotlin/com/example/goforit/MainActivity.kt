@@ -7,10 +7,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.goforit.data.AuthRepository
 import com.example.goforit.data.MapBuildRepository
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.RouteRepository
@@ -19,45 +21,58 @@ import com.example.goforit.navigation.Screen
 import com.example.goforit.ui.account.AccountScreen
 import com.example.goforit.ui.collection.CollectionScreen
 import com.example.goforit.ui.home.HomeScreen
+import com.example.goforit.ui.login.LoginScreen
 import com.example.goforit.ui.run.RunScreen
 import com.example.goforit.ui.theme.GoForItTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 匿名登入 + 開始監聽雲端修復紀錄（App 一啟動就準備好）
-        RestorationRepository.start()
-        RouteRepository.start()
-        MapBuildRepository.start()
         enableEdgeToEdge()
         setContent {
             GoForItTheme {
-                // NavController：整個 App 的導航管理員，記住現在在哪一頁
-                val navController = rememberNavController()
+                // 觀察登入狀態：null 或匿名帳號都視為「尚未登入」
+                val user = AuthRepository.user
+                val loggedIn = user != null && !user.isAnonymous
 
-                // Scaffold：Material3 的頁面框架，幫我們安排 bottomBar 的位置
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    bottomBar = {
-                        // 把 navController 傳給底部導航列，點擊才能切換頁面
-                        BottomNavBar(navController = navController)
+                if (!loggedIn) {
+                    // 還沒登入 → 顯示登入頁
+                    LoginScreen()
+                } else {
+                    // 已登入 → 啟動雲端監聽（用目前帳號的 uid），再進主畫面
+                    LaunchedEffect(user!!.uid) {
+                        RestorationRepository.start()
+                        RouteRepository.start()
+                        MapBuildRepository.start()
                     }
-                ) { innerPadding ->
-                    // NavHost：根據目前 route 決定顯示哪個畫面
-                    // startDestination：App 啟動時預設顯示首頁
-                    NavHost(
-                        navController    = navController,
-                        startDestination = Screen.Home.route,
-                        modifier         = Modifier.padding(innerPadding)
-                    ) {
-                        // 每個 composable 對應一個頁面
-                        composable(Screen.Home.route)    { HomeScreen() }
-                        composable(Screen.Run.route)     { RunScreen() }
-                        composable(Screen.Records.route) { CollectionScreen() }
-                        composable(Screen.Account.route) { AccountScreen() }
-                    }
+                    MainApp()
                 }
             }
+        }
+    }
+}
+
+// 主畫面：底部導航列 + 四個分頁
+@androidx.compose.runtime.Composable
+private fun MainApp() {
+    // NavController：整個 App 的導航管理員，記住現在在哪一頁
+    val navController = rememberNavController()
+
+    // Scaffold：Material3 的頁面框架，幫我們安排 bottomBar 的位置
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        bottomBar = { BottomNavBar(navController = navController) }
+    ) { innerPadding ->
+        // NavHost：根據目前 route 決定顯示哪個畫面
+        NavHost(
+            navController    = navController,
+            startDestination = Screen.Home.route,
+            modifier         = Modifier.padding(innerPadding)
+        ) {
+            composable(Screen.Home.route)    { HomeScreen() }
+            composable(Screen.Run.route)     { RunScreen() }
+            composable(Screen.Records.route) { CollectionScreen() }
+            composable(Screen.Account.route) { AccountScreen() }
         }
     }
 }
