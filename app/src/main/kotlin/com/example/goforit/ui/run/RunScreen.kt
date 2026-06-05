@@ -150,7 +150,7 @@ fun RunScreen() {
         ) {
             if (phase == RunPhase.PRE_RUN) {
                 Column {
-                    Text("去步步", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("去跑步", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     Text("探索臺南古蹟", fontSize = 13.sp, color = TextGray)
                 }
             } else {
