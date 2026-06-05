@@ -79,6 +79,8 @@ fun RunScreen() {
     var selectedRoutePoints by remember { mutableStateOf<List<Point>>(emptyList()) }
     // 剛解鎖的古蹟，用於顯示通知卡
     var notifHeritage       by remember { mutableStateOf<Heritage?>(null) }
+    // 停止確認對話框（直接跑步模式使用）
+    var showStopDialog      by remember { mutableStateOf(false) }
     // 即時計算已跑距離（每新增一個 GPS 點就重算）
     val coveredKm = remember(pointCount) {
         if (tracker.points.size < 2) 0f
@@ -157,13 +159,13 @@ fun RunScreen() {
 
     Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
 
-        // ── 頁首：選了路線跑步時隱藏，讓地圖佔滿；直接跑步仍顯示計時器 ────────
+        // ── 頁首：選了路線跑步時隱藏；直接跑步時顯示標題或統計列 ─────────────
         if (selectedRoutePoints.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color.White)
-                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                    .padding(horizontal = 20.dp, vertical = 14.dp)
             ) {
                 if (phase == RunPhase.PRE_RUN) {
                     Column {
@@ -171,12 +173,34 @@ fun RunScreen() {
                         Text("探索臺南古蹟", fontSize = 13.sp, color = TextGray)
                     }
                 } else {
-                    Text(
-                        text = formatTime(elapsedSeconds),
-                        fontSize = 40.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+                    // 直接跑步中：距離（左）| 時間（中）| 停止按鈕（右）
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("${"%.2f".format(coveredKm)} km",
+                                fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            Text("距離", fontSize = 12.sp, color = TextGray)
+                        }
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(formatTime(elapsedSeconds),
+                                fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            Text("時間", fontSize = 12.sp, color = TextGray)
+                        }
+                        Button(
+                            onClick = { showStopDialog = true },
+                            modifier = Modifier.size(44.dp),
+                            shape = RoundedCornerShape(50),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text("■", color = Color.White, fontSize = 16.sp)
+                        }
+                    }
                 }
             }
         }
@@ -285,30 +309,31 @@ fun RunScreen() {
                     )
                 }
             } else {
-                // ── 直接跑步：圓形停止按鈕（等一下更新） ───────────────────
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .background(Color.White.copy(alpha = 0.95f))
-                        .padding(20.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Button(
-                        onClick = {
-                            RouteRepository.addRun(tracker.points.toList())
-                            tracker.stop()
-                            phase = RunPhase.PRE_RUN
-                        },
-                        modifier = Modifier.size(72.dp),
-                        shape = RoundedCornerShape(50),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
-                    ) {
-                        Text("停止", color = Color.White, fontWeight = FontWeight.Bold)
+                // ── 直接跑步：古蹟解鎖通知（有時才顯示）────────────────────
+                notifHeritage?.let { h ->
+                    Column(modifier = Modifier.align(Alignment.BottomCenter)) {
+                        HeritageUnlockCard(
+                            heritage = h,
+                            silverReward = HERITAGE_UNLOCK_REWARD,
+                            onDismiss = { notifHeritage = null }
+                        )
                     }
                 }
             }
         }
+    }
+
+    // ── 停止確認對話框（直接跑步模式） ────────────────────────────────────────
+    if (showStopDialog) {
+        StopConfirmDialog(
+            onConfirm = {
+                RouteRepository.addRun(tracker.points.toList())
+                tracker.stop()
+                showStopDialog = false
+                phase = RunPhase.PRE_RUN
+            },
+            onDismiss = { showStopDialog = false }
+        )
     }
 }
 

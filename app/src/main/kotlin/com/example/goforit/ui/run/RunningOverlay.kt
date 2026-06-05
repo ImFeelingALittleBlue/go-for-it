@@ -86,6 +86,40 @@ fun HeritageUnlockCard(
     }
 }
 
+// 停止確認對話框：避免不小心結束跑程
+@Composable
+fun StopConfirmDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("要結束跑程嗎？", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5C3D1E))
+            ) {
+                Text("結束跑步", color = Color.White)
+            }
+        },
+        dismissButton = {
+            Button(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD4822A))
+            ) {
+                Text("繼續跑步", color = Color.White)
+            }
+        },
+        containerColor = Color.White,
+        shape = RoundedCornerShape(16.dp)
+    )
+}
+
 // mm:ss 格式（供 RunningStatsBar 使用）
 internal fun formatOverlayTime(seconds: Int): String =
     "%02d:%02d".format(seconds / 60, seconds % 60)
