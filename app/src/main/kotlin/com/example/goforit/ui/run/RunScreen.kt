@@ -44,13 +44,18 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-// 去探索的三個子畫面
+// 去探索的子畫面
 private sealed class RunNav {
-    object Main        : RunNav()   // 地圖 + 選擇路線/直接跑步
-    object SavedRoutes : RunNav()   // 已儲存路線清單
-    data class RoutePreview(        // GPX 路線預覽
-        val points: List<Point>,
-        val distanceKm: Float
+    object Main        : RunNav()
+    object SavedRoutes : RunNav()
+    data class RoutePreview(val points: List<Point>, val distanceKm: Float) : RunNav()
+    data class Summary(                    // 選擇路線跑完後的結算頁
+        val trackPoints: List<Point>,
+        val routePoints: List<Point>,
+        val coveredKm: Float,
+        val elapsedSeconds: Int,
+        val unlockedHeritages: List<Heritage>,
+        val silverEarned: Int
     ) : RunNav()
 }
 
@@ -154,7 +159,19 @@ fun RunScreen() {
             )
             return
         }
-        else -> Unit   // RunNav.Main：繼續顯示主畫面
+        is RunNav.Summary -> {
+            RunSummaryScreen(
+                trackPoints = n.trackPoints,
+                routePoints = n.routePoints,
+                coveredKm = n.coveredKm,
+                elapsedSeconds = n.elapsedSeconds,
+                unlockedHeritages = n.unlockedHeritages,
+                silverEarned = n.silverEarned,
+                onFinish = { nav = RunNav.Main }
+            )
+            return
+        }
+        else -> Unit
     }
 
     Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
@@ -299,13 +316,7 @@ fun RunScreen() {
                     RunningStatsBar(
                         coveredKm = coveredKm,
                         elapsedSeconds = elapsedSeconds,
-                        onStop = {
-                            RouteRepository.addRun(tracker.points.toList())
-                            tracker.stop()
-                            selectedRoutePoints = emptyList()
-                            notifHeritage = null
-                            phase = RunPhase.PRE_RUN
-                        }
+                        onStop = { showStopDialog = true }
                     )
                 }
             } else {
@@ -323,14 +334,33 @@ fun RunScreen() {
         }
     }
 
-    // ── 停止確認對話框（直接跑步模式） ────────────────────────────────────────
+    // ── 停止確認對話框（兩種跑步模式共用） ─────────────────────────────────
     if (showStopDialog) {
         StopConfirmDialog(
             onConfirm = {
-                RouteRepository.addRun(tracker.points.toList())
-                tracker.stop()
                 showStopDialog = false
-                phase = RunPhase.PRE_RUN
+                if (selectedRoutePoints.isNotEmpty()) {
+                    // 選路線跑步 → 前往結算頁
+                    val summary = RunNav.Summary(
+                        trackPoints      = tracker.points.toList(),
+                        routePoints      = selectedRoutePoints.toList(),
+                        coveredKm        = coveredKm,
+                        elapsedSeconds   = elapsedSeconds,
+                        unlockedHeritages = heritages.filter { it.id in unlockedDuringRun },
+                        silverEarned     = unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD
+                    )
+                    RouteRepository.addRun(tracker.points.toList())
+                    tracker.stop()
+                    selectedRoutePoints = emptyList()
+                    notifHeritage = null
+                    phase = RunPhase.PRE_RUN
+                    nav = summary
+                } else {
+                    // 直接跑步 → 回主畫面
+                    RouteRepository.addRun(tracker.points.toList())
+                    tracker.stop()
+                    phase = RunPhase.PRE_RUN
+                }
             },
             onDismiss = { showStopDialog = false }
         )
