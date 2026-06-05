@@ -29,18 +29,21 @@ import com.mapbox.maps.plugin.annotation.annotations
 import com.mapbox.maps.plugin.annotation.generated.PolylineAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.createPolylineAnnotationManager
 
-// 路線預覽畫面（對應設計稿「去探索3」）
-// 顯示上傳 GPX 後的路線地圖、AI 語音導覽資訊、附近古蹟
+// 故事生成的三個狀態
+private enum class StoryState { IDLE, GENERATING, DONE }
+
+// 路線預覽畫面：上傳 GPX 後顯示路線地圖，並提供 AI 故事生成入口
 @Composable
 fun RoutePreviewScreen(
-    points: List<Point>,       // GPX 解析出的軌跡點
-    distanceKm: Float,         // 總距離
+    points: List<Point>,
+    distanceKm: Float,
     onBack: () -> Unit,
-    onStartRun: () -> Unit     // 開始跑步，切換到計時畫面
+    onStartRun: () -> Unit
 ) {
     val context        = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val mapView        = remember { MapView(context) }
+    var storyState     by remember { mutableStateOf(StoryState.IDLE) }
 
     DisposableEffect(lifecycleOwner) {
         val obs = object : DefaultLifecycleObserver {
@@ -72,22 +75,18 @@ fun RoutePreviewScreen(
             )
         }
 
-        // ── 地圖（固定高度）+ 距離徽章覆蓋 ─────────────────────────────────
+        // ── 地圖 + 距離徽章 ────────────────────────────────────────────────
         Box(modifier = Modifier.fillMaxWidth().height(240.dp)) {
             AndroidView(
                 factory = {
                     mapView.apply {
                         mapboxMap.loadStyleUri(Style.MAPBOX_STREETS) {
                             applyWarmMapStyle(it)
-                            // 路線中心點作為鏡頭目標
-                            val center = if (points.isNotEmpty())
-                                points[points.size / 2]
-                            else
-                                Point.fromLngLat(120.2028, 23.0000)
+                            val center = if (points.isNotEmpty()) points[points.size / 2]
+                                         else Point.fromLngLat(120.2028, 23.0000)
                             mapboxMap.setCamera(
                                 CameraOptions.Builder().center(center).zoom(13.0).build()
                             )
-                            // 畫出橘色路線折線
                             if (points.size >= 2) {
                                 annotations.createPolylineAnnotationManager().create(
                                     PolylineAnnotationOptions()
@@ -103,37 +102,33 @@ fun RoutePreviewScreen(
             )
             // 距離徽章
             Surface(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(12.dp),
+                modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
                 shape = RoundedCornerShape(16.dp),
                 color = Color(0xFF5C3D1E)
             ) {
                 Text(
-                    text = "距離 ${"%.1f".format(distanceKm)}km",
-                    color = Color.White,
-                    fontSize = 13.sp,
+                    "距離 ${"%.1f".format(distanceKm)}km",
+                    color = Color.White, fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                 )
             }
         }
 
-        // ── 可捲動的下半部內容 ──────────────────────────────────────────────
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-        ) {
-            // AI 語音導覽卡片（Firebase Functions + Claude API 尚未接入，顯示佔位符）
-            PodcastPlaceholderCard()
+        // ── 可捲動下半部 ───────────────────────────────────────────────────
+        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Spacer(Modifier.height(8.dp))
-            // 附近古蹟列表（複用首頁的元件，後續可換成路線附近的篩選結果）
+            StoryCard(
+                state = storyState,
+                onGenerate = { storyState = StoryState.GENERATING },
+                onCancel   = { storyState = StoryState.IDLE }
+            )
+            Spacer(Modifier.height(8.dp))
             NearbyHeritageSection(modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(16.dp))
         }
 
-        // ── 底部按鈕 ────────────────────────────────────────────────────────
+        // ── 底部按鈕 ───────────────────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -141,9 +136,8 @@ fun RoutePreviewScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // premium 功能：先儲存（目前停用）
             OutlinedButton(
-                onClick = { /* TODO: 儲存路線功能 */ },
+                onClick = { },
                 modifier = Modifier.weight(1f).height(48.dp),
                 shape = RoundedCornerShape(24.dp),
                 enabled = false
@@ -162,25 +156,75 @@ fun RoutePreviewScreen(
     }
 }
 
-// AI 語音導覽佔位符卡片（等 Firebase Functions + Claude API 接入後替換）
+// AI 故事生成卡片，依 state 顯示不同內容
 @Composable
-private fun PodcastPlaceholderCard() {
+private fun StoryCard(
+    state: StoryState,
+    onGenerate: () -> Unit,
+    onCancel: () -> Unit
+) {
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         shape = RoundedCornerShape(12.dp),
-        color = Color(0xFF5C3D1E)
+        color = Color.White
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("AI生成 Podcast", fontSize = 11.sp, color = Color(0xFFD4A96A))
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "語音導覽生成中，上傳完成後自動產生…",
-                fontSize = 14.sp,
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold
-            )
+            Text("AI生成 Podcast", fontSize = 11.sp, color = Color(0xFFD4A96A),
+                fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(8.dp))
+
+            when (state) {
+                StoryState.IDLE -> {
+                    Text("為上傳路線生成故事？",
+                        fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
+                    Text("AI 將根據路線上的古蹟，生成一段語音故事導覽",
+                        fontSize = 13.sp, color = Color(0xFF888888), lineHeight = 20.sp)
+                    Spacer(Modifier.height(16.dp))
+                    Button(
+                        onClick = onGenerate,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5C3D1E))
+                    ) {
+                        Text("生成路線故事", color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(vertical = 2.dp))
+                    }
+                }
+
+                StoryState.GENERATING -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = OrangeAccent
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text("生成路線故事中...",
+                            fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text("正在根據路線上的古蹟生成導覽故事，請稍候",
+                        fontSize = 13.sp, color = Color(0xFF888888))
+                    Spacer(Modifier.height(12.dp))
+                    TextButton(
+                        onClick = onCancel,
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text("取消", color = Color(0xFF888888), fontSize = 13.sp)
+                    }
+                }
+
+                StoryState.DONE -> {
+                    // Firebase Functions + Claude API 接入後填入真實內容
+                    Text("語音導覽生成完成",
+                        fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(4.dp))
+                    Text("點選下方「開始跑步」即可邊跑邊聽導覽故事",
+                        fontSize = 13.sp, color = Color(0xFF888888))
+                }
+            }
         }
     }
 }
