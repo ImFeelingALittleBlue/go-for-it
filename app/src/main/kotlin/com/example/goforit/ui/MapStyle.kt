@@ -4,6 +4,7 @@ import com.mapbox.maps.Style
 import com.mapbox.maps.extension.style.layers.generated.BackgroundLayer
 import com.mapbox.maps.extension.style.layers.generated.FillLayer
 import com.mapbox.maps.extension.style.layers.generated.LineLayer
+import com.mapbox.maps.extension.style.layers.getLayer
 
 // 把 MAPBOX_STREETS 的預設灰藍色調改成設計稿的暖米色系
 // getLayer() 取得現有圖層後直接改顏色；圖層不存在時 as? 回傳 null，?.呼叫直接略過
