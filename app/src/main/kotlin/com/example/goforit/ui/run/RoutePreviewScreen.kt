@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import com.example.goforit.ui.applyWarmMapStyle
 import com.example.goforit.ui.home.NearbyHeritageSection
 import com.example.goforit.ui.home.OrangeAccent
 import com.mapbox.geojson.Point
@@ -77,6 +78,7 @@ fun RoutePreviewScreen(
                 factory = {
                     mapView.apply {
                         mapboxMap.loadStyleUri(Style.MAPBOX_STREETS) {
+                            applyWarmMapStyle(it)
                             // 路線中心點作為鏡頭目標
                             val center = if (points.isNotEmpty())
                                 points[points.size / 2]

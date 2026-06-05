@@ -1,7 +1,10 @@
 package com.example.goforit.ui.home
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -13,6 +16,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.goforit.data.Heritage
+import com.example.goforit.data.RestorationRecord
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 // 暫時假資料（組員建好 Room DB 後換成從資料庫讀取）
 // Triple = (名稱, 時期•年份, 是否已解鎖)
@@ -22,6 +30,117 @@ private val sampleSites = listOf(
     Triple("臺南郵便局", "日治時期 • 1915", false),
     Triple("赤崁樓",     "明鄭時期 • 1653", true),
 )
+
+@Composable
+fun MapHeritageSection(
+    heritages: List<Heritage>,
+    records: List<RestorationRecord>,
+    builtIds: Set<Int>,
+    selectedFilter: HeritageFilter,
+    onFilterChange: (HeritageFilter) -> Unit,
+    onHeritageClick: (Heritage) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val restoredAtById = records.associate { it.heritageId to it.restoredAt }
+    val restoredCount = heritages.count { it.id in restoredAtById }
+    val pendingCount = heritages.size - restoredCount
+    val builtCount = heritages.count { it.id in builtIds }
+    val filteredHeritages = when (selectedFilter) {
+        HeritageFilter.ALL -> heritages
+        HeritageFilter.RESTORED -> heritages.filter { it.id in restoredAtById }
+        HeritageFilter.PENDING -> heritages.filter { it.id !in restoredAtById }
+    }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("古蹟與遺址", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "展開", tint = TextGray)
+        }
+
+        LazyRow(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item {
+                StatusChip(
+                    text = "全部 ${heritages.size}",
+                    active = selectedFilter == HeritageFilter.ALL,
+                    onClick = { onFilterChange(HeritageFilter.ALL) }
+                )
+            }
+            item {
+                StatusChip(
+                    text = "已修復 $restoredCount",
+                    active = selectedFilter == HeritageFilter.RESTORED,
+                    indicatorColor = Color(0xFF4CAF50),
+                    onClick = { onFilterChange(HeritageFilter.RESTORED) }
+                )
+            }
+            item {
+                StatusChip(
+                    text = "待修復 $pendingCount",
+                    active = selectedFilter == HeritageFilter.PENDING,
+                    indicatorColor = OrangeAccent,
+                    onClick = { onFilterChange(HeritageFilter.PENDING) }
+                )
+            }
+            item {
+                StatusChip(
+                    text = "已創建 $builtCount",
+                    active = false,
+                    indicatorColor = Color(0xFF9B6A3F)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
+
+        if (filteredHeritages.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("沒有符合條件的古蹟", color = TextGray, fontSize = 14.sp)
+            }
+        } else {
+            LazyColumn {
+                items(filteredHeritages, key = { it.id }) { heritage ->
+                    MapHeritageItem(
+                        heritage = heritage,
+                        restoredAt = restoredAtById[heritage.id] ?: 0L,
+                        isBuilt = heritage.id in builtIds,
+                        onClick = { onHeritageClick(heritage) }
+                    )
+                    HorizontalDivider(color = ChipBg, thickness = 1.dp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun RestoredHeritageSection(
+    heritages: List<Heritage>,
+    records: List<RestorationRecord>,
+    onHeritageClick: (Heritage) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    MapHeritageSection(
+        heritages = heritages,
+        records = records,
+        builtIds = emptySet(),
+        selectedFilter = HeritageFilter.RESTORED,
+        onFilterChange = {},
+        onHeritageClick = onHeritageClick,
+        modifier = modifier
+    )
+}
 
 @Composable
 fun NearbyHeritageSection(modifier: Modifier = Modifier) {
@@ -64,17 +183,87 @@ fun NearbyHeritageSection(modifier: Modifier = Modifier) {
 
 // 篩選標籤元件
 @Composable
-fun StatusChip(text: String, active: Boolean) {
+fun StatusChip(
+    text: String,
+    active: Boolean,
+    indicatorColor: Color? = null,
+    onClick: (() -> Unit)? = null
+) {
     Surface(
+        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
         shape = RoundedCornerShape(16.dp),
         color = if (active) OrangeAccent else ChipBg
     ) {
-        Text(
-            text = text,
+        Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            fontSize = 12.sp,
-            color = if (active) Color.White else Color(0xFF1A1A1A)
-        )
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (indicatorColor != null) {
+                Surface(
+                    modifier = Modifier.size(8.dp),
+                    shape = RoundedCornerShape(50),
+                    color = indicatorColor
+                ) {}
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(
+                text = text,
+                fontSize = 12.sp,
+                color = if (active) Color.White else Color(0xFF1A1A1A)
+            )
+        }
+    }
+}
+
+@Composable
+private fun MapHeritageItem(
+    heritage: Heritage,
+    restoredAt: Long,
+    isBuilt: Boolean,
+    onClick: () -> Unit
+) {
+    val restored = restoredAt > 0L
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(heritage.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Spacer(Modifier.height(2.dp))
+            Text(
+                when {
+                    isBuilt -> "已創建於我的地圖"
+                    restored -> "解鎖於 ${formatUnlockTime(restoredAt)}"
+                    else -> heritage.year.ifBlank { "待修復" }
+                },
+                fontSize = 12.sp,
+                color = TextGray
+            )
+        }
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = when {
+                isBuilt -> Color(0xFF9B6A3F)
+                restored -> Color(0xFF4CAF50)
+                else -> OrangeAccent
+            }
+        ) {
+            Text(
+                text = when {
+                    isBuilt -> "已創建"
+                    restored -> "已解鎖"
+                    else -> "待修復"
+                },
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                fontSize = 12.sp,
+                color = Color.White,
+                fontWeight = FontWeight.Medium
+            )
+        }
     }
 }
 
@@ -108,3 +297,7 @@ fun HeritageItem(name: String, period: String, unlocked: Boolean) {
         }
     }
 }
+
+private fun formatUnlockTime(millis: Long): String =
+    if (millis > 0L) SimpleDateFormat("M月d日 HH:mm", Locale.TAIWAN).format(Date(millis))
+    else "未知時間"
