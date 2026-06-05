@@ -110,6 +110,22 @@ fun LoginScreen() {
             Text("登入即表示同意 服務條款 與 隱私政策", color = Gray, fontSize = 12.sp)
         }
 
+        Spacer(Modifier.height(8.dp))
+
+        // ── 訪客模式（Google 登入失敗時的備用，資料不會儲存到個人帳號）────────
+        TextButton(onClick = {
+            if (isLoading) return@TextButton
+            isLoading = true
+            errorMessage = null
+            scope.launch {
+                val result = AuthRepository.signInAnonymously()
+                isLoading = false
+                result.onFailure { errorMessage = "訪客登入失敗：${it.message}" }
+            }
+        }) {
+            Text("不登入，先逛逛", color = Gray, fontSize = 13.sp)
+        }
+
         Spacer(Modifier.weight(0.12f))
     }
 }

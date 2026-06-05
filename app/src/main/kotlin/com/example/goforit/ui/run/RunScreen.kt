@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import com.example.goforit.data.Heritage
 import com.example.goforit.data.HeritageRepository
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.RouteRepository
@@ -43,18 +44,23 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-// 去探索的三個子畫面
+// 去探索的子畫面
 private sealed class RunNav {
-    object Main        : RunNav()   // 地圖 + 選擇路線/直接跑步
-    object SavedRoutes : RunNav()   // 已儲存路線清單
-    data class RoutePreview(        // GPX 路線預覽
-        val points: List<Point>,
-        val distanceKm: Float
+    object Main        : RunNav()
+    object SavedRoutes : RunNav()
+    data class RoutePreview(val points: List<Point>, val distanceKm: Float) : RunNav()
+    data class Summary(                    // 選擇路線跑完後的結算頁
+        val trackPoints: List<Point>,
+        val routePoints: List<Point>,
+        val coveredKm: Float,
+        val elapsedSeconds: Int,
+        val unlockedHeritages: List<Heritage>,
+        val silverEarned: Int
     ) : RunNav()
 }
 
 // 跑步的兩個階段
-private enum class RunPhase { PRE_RUN, RUNNING }
+private enum class RunPhase { PRE_RUN, RUNNING, PAUSED }
 private const val HERITAGE_UNLOCK_RADIUS_METERS = 40.0
 private const val HERITAGE_UNLOCK_REWARD = 25
 
@@ -70,9 +76,23 @@ fun RunScreen() {
     var phase           by remember { mutableStateOf(RunPhase.PRE_RUN) }
     var elapsedSeconds  by remember { mutableStateOf(0) }
     var locationGranted by remember { mutableStateOf(false) }
-    var polylineManager by remember { mutableStateOf<PolylineAnnotationManager?>(null) }
-    val pointCount      = tracker.points.size   // 觀察 GPS 新點，觸發 update block
-    val unlockedDuringRun = remember { mutableStateListOf<Int>() }
+    var polylineManager    by remember { mutableStateOf<PolylineAnnotationManager?>(null) }
+    var routeLineManager   by remember { mutableStateOf<PolylineAnnotationManager?>(null) }
+    val pointCount         = tracker.points.size   // 觀察 GPS 新點，觸發 update block
+    val unlockedDuringRun  = remember { mutableStateListOf<Int>() }
+    // 選擇路線後儲存 GPX 點位，供地圖顯示與停止後清空
+    var selectedRoutePoints by remember { mutableStateOf<List<Point>>(emptyList()) }
+    // 剛解鎖的古蹟，用於顯示通知卡
+    var notifHeritage       by remember { mutableStateOf<Heritage?>(null) }
+    // 停止確認對話框（直接跑步模式使用）
+    var showStopDialog      by remember { mutableStateOf(false) }
+    // 即時計算已跑距離（每新增一個 GPS 點就重算）
+    val coveredKm = remember(pointCount) {
+        if (tracker.points.size < 2) 0f
+        else tracker.points.zipWithNext { a, b ->
+            (distanceMeters(a.latitude(), a.longitude(), b.latitude(), b.longitude()) / 1000.0).toFloat()
+        }.sum()
+    }
 
     rememberLocationPermission { locationGranted = true }
 
@@ -110,6 +130,7 @@ fun RunScreen() {
                 unlockedDuringRun.add(heritage.id)
                 RestorationRepository.add(heritage)
                 SilverSaltStore.add(context, HERITAGE_UNLOCK_REWARD)
+                notifHeritage = heritage   // 觸發底部通知卡
             }
     }
 
@@ -128,7 +149,9 @@ fun RunScreen() {
                 distanceKm = n.distanceKm,
                 onBack = { nav = RunNav.SavedRoutes },
                 onStartRun = {
+                    selectedRoutePoints = n.points   // 保存 GPX 路線供地圖顯示
                     elapsedSeconds = 0
+                    unlockedDuringRun.clear()
                     if (locationGranted) tracker.start()
                     phase = RunPhase.RUNNING
                     nav = RunNav.Main
@@ -136,30 +159,111 @@ fun RunScreen() {
             )
             return
         }
-        else -> Unit   // RunNav.Main：繼續顯示主畫面
+        is RunNav.Summary -> {
+            RunSummaryScreen(
+                trackPoints = n.trackPoints,
+                routePoints = n.routePoints,
+                coveredKm = n.coveredKm,
+                elapsedSeconds = n.elapsedSeconds,
+                unlockedHeritages = n.unlockedHeritages,
+                silverEarned = n.silverEarned,
+                onFinish = { nav = RunNav.Main }
+            )
+            return
+        }
+        else -> Unit
     }
 
     Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
 
-        // ── 頁首 ─────────────────────────────────────────────────────────
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color.White)
-                .padding(horizontal = 16.dp, vertical = 14.dp)
-        ) {
-            if (phase == RunPhase.PRE_RUN) {
-                Column {
-                    Text("去步步", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text("探索臺南古蹟", fontSize = 13.sp, color = TextGray)
+        // ── 頁首：選了路線跑步時隱藏；直接跑步時顯示標題、統計列或暫停確認 ───
+        if (selectedRoutePoints.isEmpty()) {
+            when (phase) {
+                RunPhase.PRE_RUN -> Box(
+                    modifier = Modifier.fillMaxWidth().background(Color.White)
+                        .padding(horizontal = 20.dp, vertical = 14.dp)
+                ) {
+                    Column {
+                        Text("去跑步", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Text("探索臺南古蹟", fontSize = 13.sp, color = TextGray)
+                    }
                 }
-            } else {
-                Text(
-                    text = formatTime(elapsedSeconds),
-                    fontSize = 40.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.align(Alignment.Center)
-                )
+                RunPhase.RUNNING -> Box(
+                    modifier = Modifier.fillMaxWidth().background(Color.White)
+                        .padding(horizontal = 20.dp, vertical = 14.dp)
+                ) {
+                    Row(modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("${"%.2f".format(coveredKm)} km",
+                                fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            Text("距離", fontSize = 12.sp, color = TextGray)
+                        }
+                        Column(modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(formatTime(elapsedSeconds),
+                                fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            Text("時間", fontSize = 12.sp, color = TextGray)
+                        }
+                        Button(
+                            onClick = { phase = RunPhase.PAUSED },
+                            shape = RoundedCornerShape(24.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5C3D1E)),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                        ) { Text("暫停", color = Color.White, fontWeight = FontWeight.SemiBold) }
+                    }
+                }
+                RunPhase.PAUSED -> Column {
+                    // 橘色確認列
+                    Row(
+                        modifier = Modifier.fillMaxWidth().background(OrangeAccent)
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("要結束旅程嗎？", color = Color.White,
+                            fontWeight = FontWeight.Bold, fontSize = 15.sp,
+                            modifier = Modifier.weight(1f))
+                        TextButton(onClick = { phase = RunPhase.RUNNING }) {
+                            Text("繼續跑步", color = Color.White, fontSize = 13.sp)
+                        }
+                        Spacer(Modifier.width(4.dp))
+                        Button(
+                            onClick = {
+                                val summary = RunNav.Summary(
+                                    trackPoints       = tracker.points.toList(),
+                                    routePoints       = emptyList(),
+                                    coveredKm         = coveredKm,
+                                    elapsedSeconds    = elapsedSeconds,
+                                    unlockedHeritages = heritages.filter { it.id in unlockedDuringRun },
+                                    silverEarned      = unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD
+                                )
+                                RouteRepository.addRun(tracker.points.toList())
+                                tracker.stop()
+                                notifHeritage = null
+                                phase = RunPhase.PRE_RUN
+                                nav = summary
+                            },
+                            shape = RoundedCornerShape(24.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5C3D1E))
+                        ) { Text("結束跑步", color = Color.White, fontSize = 13.sp) }
+                    }
+                    // 統計列（暫停時仍顯示）
+                    Row(modifier = Modifier.fillMaxWidth().background(Color.White)
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("${"%.2f".format(coveredKm)} km",
+                                fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            Text("距離", fontSize = 12.sp, color = TextGray)
+                        }
+                        Column(modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(formatTime(elapsedSeconds),
+                                fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            Text("時間", fontSize = 12.sp, color = TextGray)
+                        }
+                    }
+                }
             }
         }
 
@@ -183,12 +287,24 @@ fun RunScreen() {
                                         .withCircleStrokeWidth(1.5).withCircleStrokeColor("#FFFFFF")
                                 }
                             )
-                            polylineManager = annotations.createPolylineAnnotationManager()
+                            // routeLineManager 先建（在下層）→ polylineManager 在上層蓋 GPS 軌跡
+                            routeLineManager = annotations.createPolylineAnnotationManager()
+                            polylineManager  = annotations.createPolylineAnnotationManager()
                         }
                     }
                 },
                 update = { mv ->
                     if (locationGranted) mv.location.updateSettings { enabled = true }
+                    // 畫 GPX 預定路線（淡橘色參考線）
+                    if (selectedRoutePoints.size >= 2) {
+                        routeLineManager?.deleteAll()
+                        routeLineManager?.create(
+                            PolylineAnnotationOptions()
+                                .withPoints(selectedRoutePoints)
+                                .withLineColor("#C8A46A").withLineWidth(3.0)
+                        )
+                    }
+                    // 畫 GPS 即時軌跡（深橘色）
                     val pts = tracker.points.toList()
                     if (pts.size >= 2) {
                         polylineManager?.deleteAll()
@@ -229,33 +345,62 @@ fun RunScreen() {
                         shape = RoundedCornerShape(24.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)
                     ) {
-                        Text("直接跑步", color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Text("直接開始", color = Color.White, fontWeight = FontWeight.SemiBold)
                     }
                 }
+            } else if (selectedRoutePoints.isNotEmpty()) {
+                // ── 選擇路線跑步：統計列 + 古蹟解鎖通知 ────────────────────
+                Column(modifier = Modifier.align(Alignment.BottomCenter)) {
+                    notifHeritage?.let { h ->
+                        HeritageUnlockCard(
+                            heritage = h,
+                            silverReward = HERITAGE_UNLOCK_REWARD,
+                            onDismiss = { notifHeritage = null }
+                        )
+                    }
+                    RunningStatsBar(
+                        coveredKm = coveredKm,
+                        elapsedSeconds = elapsedSeconds,
+                        onStop = { showStopDialog = true }
+                    )
+                }
             } else {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .background(Color.White.copy(alpha = 0.95f))
-                        .padding(20.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Button(
-                        onClick = {
-                            RouteRepository.addRun(tracker.points.toList())
-                            tracker.stop()
-                            phase = RunPhase.PRE_RUN
-                        },
-                        modifier = Modifier.size(72.dp),
-                        shape = RoundedCornerShape(50),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
-                    ) {
-                        Text("停止", color = Color.White, fontWeight = FontWeight.Bold)
+                // ── 直接跑步：古蹟解鎖通知（有時才顯示）────────────────────
+                notifHeritage?.let { h ->
+                    Column(modifier = Modifier.align(Alignment.BottomCenter)) {
+                        HeritageUnlockCard(
+                            heritage = h,
+                            silverReward = HERITAGE_UNLOCK_REWARD,
+                            onDismiss = { notifHeritage = null }
+                        )
                     }
                 }
             }
         }
+    }
+
+    // ── 停止確認對話框（選路線跑步專用，直接跑步改用 PAUSED 狀態）────────────
+    if (showStopDialog) {
+        StopConfirmDialog(
+            onConfirm = {
+                showStopDialog = false
+                val summary = RunNav.Summary(
+                    trackPoints       = tracker.points.toList(),
+                    routePoints       = selectedRoutePoints.toList(),
+                    coveredKm         = coveredKm,
+                    elapsedSeconds    = elapsedSeconds,
+                    unlockedHeritages = heritages.filter { it.id in unlockedDuringRun },
+                    silverEarned      = unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD
+                )
+                RouteRepository.addRun(tracker.points.toList())
+                tracker.stop()
+                selectedRoutePoints = emptyList()
+                notifHeritage = null
+                phase = RunPhase.PRE_RUN
+                nav = summary
+            },
+            onDismiss = { showStopDialog = false }
+        )
     }
 }
 

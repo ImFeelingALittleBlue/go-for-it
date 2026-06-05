@@ -63,6 +63,16 @@ object AuthRepository {
         }
     }
 
+    // 匿名登入：不需要 Google 帳號，適合測試或「訪客瀏覽」
+    suspend fun signInAnonymously(): Result<Unit> {
+        return try {
+            auth.signInAnonymously().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // 登出（清掉 Firebase 的登入狀態，回到登入頁）
     fun signOut() {
         auth.signOut()

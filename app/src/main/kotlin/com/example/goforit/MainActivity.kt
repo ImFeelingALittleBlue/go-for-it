@@ -31,9 +31,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             GoForItTheme {
-                // 觀察登入狀態：null 或匿名帳號都視為「尚未登入」
+                // 觀察登入狀態：null 才是未登入；匿名帳號也算已登入（可訪客瀏覽）
                 val user = AuthRepository.user
-                val loggedIn = user != null && !user.isAnonymous
+                val loggedIn = user != null
 
                 if (!loggedIn) {
                     // 還沒登入 → 顯示登入頁

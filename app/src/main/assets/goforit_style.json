@@ -1,0 +1,22 @@
+{
+  "version": 8,
+  "name": "GoForIt",
+  "imports": [
+    {
+      "id": "basemap",
+      "url": "mapbox://styles/mapbox/standard",
+      "config": {
+        "lightPreset": "day",
+        "colorBackground": "#ffffff",
+        "colorWater": "#a6bec8",
+        "colorBuildings": "#ede8de",
+        "colorGreen": "#a2a993",
+        "showPointOfInterestLabels": false,
+        "showTransitLabels": false,
+        "showRoadLabels": false
+      }
+    }
+  ],
+  "sources": {},
+  "layers": []
+}
