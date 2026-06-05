@@ -18,6 +18,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.example.goforit.data.HeritageRepository
+import com.example.goforit.data.RestorationRepository
+import com.example.goforit.data.RouteRepository
+import com.example.goforit.data.SilverSaltStore
 import com.example.goforit.ui.home.OrangeAccent
 import com.example.goforit.ui.home.TextGray
 import com.example.goforit.ui.home.rememberLocationPermission
@@ -33,6 +36,11 @@ import com.mapbox.maps.plugin.annotation.generated.createCircleAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.createPolylineAnnotationManager
 import com.mapbox.maps.plugin.locationcomponent.location
 import kotlinx.coroutines.delay
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 // 去探索的三個子畫面
 private sealed class RunNav {
@@ -46,6 +54,8 @@ private sealed class RunNav {
 
 // 跑步的兩個階段
 private enum class RunPhase { PRE_RUN, RUNNING }
+private const val HERITAGE_UNLOCK_RADIUS_METERS = 40.0
+private const val HERITAGE_UNLOCK_REWARD = 25
 
 @Composable
 fun RunScreen() {
@@ -61,6 +71,7 @@ fun RunScreen() {
     var locationGranted by remember { mutableStateOf(false) }
     var polylineManager by remember { mutableStateOf<PolylineAnnotationManager?>(null) }
     val pointCount      = tracker.points.size   // 觀察 GPS 新點，觸發 update block
+    val unlockedDuringRun = remember { mutableStateListOf<Int>() }
 
     rememberLocationPermission { locationGranted = true }
 
@@ -78,6 +89,27 @@ fun RunScreen() {
         if (phase == RunPhase.RUNNING) {
             while (true) { delay(1_000L); elapsedSeconds++ }
         }
+    }
+
+    LaunchedEffect(pointCount, phase) {
+        if (phase != RunPhase.RUNNING || pointCount == 0) return@LaunchedEffect
+        val latest = tracker.points.last()
+        val restoredIds = RestorationRepository.records().map { it.heritageId }.toSet()
+        heritages
+            .filter { it.id !in restoredIds && it.id !in unlockedDuringRun }
+            .firstOrNull { heritage ->
+                distanceMeters(
+                    latest.latitude(),
+                    latest.longitude(),
+                    heritage.lat,
+                    heritage.lng
+                ) <= HERITAGE_UNLOCK_RADIUS_METERS
+            }
+            ?.let { heritage ->
+                unlockedDuringRun.add(heritage.id)
+                RestorationRepository.add(heritage)
+                SilverSaltStore.add(context, HERITAGE_UNLOCK_REWARD)
+            }
     }
 
     // ── 子畫面路由 ────────────────────────────────────────────────────────
@@ -187,6 +219,7 @@ fun RunScreen() {
                     Button(
                         onClick = {
                             elapsedSeconds = 0
+                            unlockedDuringRun.clear()
                             if (locationGranted) tracker.start()
                             phase = RunPhase.RUNNING
                         },
@@ -207,7 +240,11 @@ fun RunScreen() {
                     contentAlignment = Alignment.Center
                 ) {
                     Button(
-                        onClick = { tracker.stop(); phase = RunPhase.PRE_RUN },
+                        onClick = {
+                            RouteRepository.addRun(tracker.points.toList())
+                            tracker.stop()
+                            phase = RunPhase.PRE_RUN
+                        },
                         modifier = Modifier.size(72.dp),
                         shape = RoundedCornerShape(50),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
@@ -222,3 +259,13 @@ fun RunScreen() {
 
 private fun formatTime(seconds: Int): String =
     "%02d:%02d".format(seconds / 60, seconds % 60)
+
+private fun distanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val earthRadius = 6_371_000.0
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val rLat1 = Math.toRadians(lat1)
+    val rLat2 = Math.toRadians(lat2)
+    val h = sin(dLat / 2).pow(2) + cos(rLat1) * cos(rLat2) * sin(dLon / 2).pow(2)
+    return 2 * earthRadius * atan2(sqrt(h), sqrt(1 - h))
+}
