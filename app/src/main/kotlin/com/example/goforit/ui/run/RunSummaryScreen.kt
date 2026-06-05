@@ -34,8 +34,6 @@ import com.mapbox.maps.plugin.annotation.annotations
 import com.mapbox.maps.plugin.annotation.generated.PolylineAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.createPolylineAnnotationManager
 
-private enum class StoryState { IDLE, GENERATING, DONE }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RunSummaryScreen(

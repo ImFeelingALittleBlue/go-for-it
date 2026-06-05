@@ -29,9 +29,6 @@ import com.mapbox.maps.plugin.annotation.annotations
 import com.mapbox.maps.plugin.annotation.generated.PolylineAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.createPolylineAnnotationManager
 
-// 故事生成的三個狀態
-private enum class StoryState { IDLE, GENERATING, DONE }
-
 // 路線預覽畫面：上傳 GPX 後顯示路線地圖，並提供 AI 故事生成入口
 @Composable
 fun RoutePreviewScreen(
