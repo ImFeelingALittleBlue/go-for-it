@@ -34,6 +34,8 @@ import com.mapbox.maps.plugin.annotation.annotations
 import com.mapbox.maps.plugin.annotation.generated.PolylineAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.createPolylineAnnotationManager
 
+private enum class StoryState { IDLE, GENERATING, DONE }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RunSummaryScreen(
@@ -112,6 +114,11 @@ fun RunSummaryScreen(
                     SummaryStatItem("+$silverEarned", "時光銀鹽")
                 }
             }
+
+            Spacer(Modifier.height(10.dp))
+
+            // 故事生成卡（IDLE / GENERATING 兩個狀態）
+            SummaryStoryCard()
 
             Spacer(Modifier.height(10.dp))
 
@@ -268,6 +275,62 @@ private fun ShareExportSheet(
         Spacer(Modifier.height(12.dp))
         TextButton(onClick = onDismiss) {
             Text("關閉", color = Color(0xFF888888))
+        }
+    }
+}
+
+// 故事生成卡：IDLE 顯示「為這條路線生成故事？」，GENERATING 顯示 loading
+@Composable
+private fun SummaryStoryCard() {
+    var state by remember { mutableStateOf(StoryState.IDLE) }
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(12.dp), color = Color.White
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("AI生成 Podcast", fontSize = 11.sp, color = Color(0xFFD4A96A),
+                fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(8.dp))
+            when (state) {
+                StoryState.IDLE -> {
+                    Text("為這條路線生成路線故事？",
+                        fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
+                    Text("AI 將根據路線上的古蹟生成語音導覽故事",
+                        fontSize = 13.sp, color = Color(0xFF888888))
+                    Spacer(Modifier.height(14.dp))
+                    Button(
+                        onClick = { state = StoryState.GENERATING },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5C3D1E))
+                    ) {
+                        Text("生成路線故事", color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(vertical = 2.dp))
+                    }
+                }
+                StoryState.GENERATING -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp, color = OrangeAccent)
+                        Spacer(Modifier.width(10.dp))
+                        Text("生成路線故事中...",
+                            fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text("正在根據路線上的古蹟生成導覽故事，請稍候",
+                        fontSize = 13.sp, color = Color(0xFF888888))
+                    Spacer(Modifier.height(10.dp))
+                    TextButton(onClick = { state = StoryState.IDLE },
+                        modifier = Modifier.align(Alignment.End)) {
+                        Text("取消", color = Color(0xFF888888), fontSize = 13.sp)
+                    }
+                }
+                StoryState.DONE -> {
+                    Text("語音導覽生成完成", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
         }
     }
 }
