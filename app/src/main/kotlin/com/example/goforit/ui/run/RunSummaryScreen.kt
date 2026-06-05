@@ -1,6 +1,6 @@
 package com.example.goforit.ui.run
 
-import android.content.Intent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -11,6 +11,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -177,103 +180,95 @@ fun RunSummaryScreen(
         }
     }
 
-    // ── 分享底頁 ────────────────────────────────────────────────────────
+    // ── 分享底頁：預覽成就圖片 + 儲存/下載 ────────────────────────────
     if (showShareSheet) {
         ModalBottomSheet(onDismissRequest = { showShareSheet = false }) {
-            ShareAchievementSheet(
-                coveredKm = coveredKm,
-                elapsedSeconds = elapsedSeconds,
+            ShareExportSheet(
+                coveredKm        = coveredKm,
+                elapsedSeconds   = elapsedSeconds,
                 unlockedHeritages = unlockedHeritages,
-                silverEarned = silverEarned,
-                onKeepExploring = { showShareSheet = false },
-                onShare = {
-                    val text = "我在臺南完成了古蹟探索！\n" +
-                        "跑了 ${"%.2f".format(coveredKm)} km，" +
-                        "耗時 ${formatOverlayTime(elapsedSeconds)}，" +
-                        "解鎖 ${unlockedHeritages.size} 處古蹟，" +
-                        "獲得 $silverEarned 時光銀鹽！\n#GoForIt #臺南古蹟"
-                    context.startActivity(Intent.createChooser(
-                        Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, text)
-                        }, null
-                    ))
-                }
+                silverEarned     = silverEarned,
+                trackPoints      = trackPoints,
+                onDismiss        = { showShareSheet = false }
             )
         }
     }
 }
 
-// 分享底頁：成就解鎖卡片
+// 分享底頁：預覽成就圖片 + 儲存圖片 / 下載 GPX 兩個動作
 @Composable
-private fun ShareAchievementSheet(
+private fun ShareExportSheet(
     coveredKm: Float,
     elapsedSeconds: Int,
     unlockedHeritages: List<Heritage>,
     silverEarned: Int,
-    onKeepExploring: () -> Unit,
-    onShare: () -> Unit
+    trackPoints: List<Point>,
+    onDismiss: () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally) {
+    val context = LocalContext.current
+    // 預先產生成就圖片（只算一次）
+    val bitmap = remember {
+        createShareBitmap(
+            coveredKm      = coveredKm,
+            timeStr        = formatOverlayTime(elapsedSeconds),
+            heritageCount  = unlockedHeritages.size,
+            silverEarned   = silverEarned
+        )
+    }
+    var imgMsg by remember { mutableStateOf<String?>(null) }
+    var gpxMsg by remember { mutableStateOf<String?>(null) }
 
-        // 成就標題
-        Surface(shape = RoundedCornerShape(20.dp), color = OrangeAccent) {
-            Text("成就解鎖！", modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-        }
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("分享此次探索", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         Spacer(Modifier.height(16.dp))
 
-        // 成就卡片主體
-        Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
-            color = Color(0xFF2C2218)) {
-            Column(modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("古蹟探索者", fontWeight = FontWeight.Bold, fontSize = 20.sp,
-                    color = Color.White)
-                Spacer(Modifier.height(4.dp))
-                Text("完成一次路線探索", fontSize = 13.sp, color = Color(0xFFD4A96A))
-                Spacer(Modifier.height(16.dp))
-                // 統計
-                Row(modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly) {
-                    ShareStatItem("${"%.2f".format(coveredKm)} km", "距離")
-                    ShareStatItem(formatOverlayTime(elapsedSeconds), "時間")
-                    ShareStatItem("${unlockedHeritages.size}", "古蹟解鎖")
-                    ShareStatItem("+$silverEarned", "銀鹽")
-                }
-                if (unlockedHeritages.isNotEmpty()) {
-                    Spacer(Modifier.height(12.dp))
-                    Text(unlockedHeritages.joinToString("・") { it.name },
-                        fontSize = 12.sp, color = Color(0xFFBBAA90),
-                        textAlign = TextAlign.Center, lineHeight = 18.sp)
-                }
-            }
-        }
+        // 成就圖片預覽
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = "成就圖片",
+            contentScale = ContentScale.FillWidth,
+            modifier = Modifier.fillMaxWidth().aspectRatio(900f / 480f)
+                .clip(RoundedCornerShape(12.dp))
+        )
 
         Spacer(Modifier.height(20.dp))
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onKeepExploring,
-                modifier = Modifier.weight(1f).height(48.dp),
-                shape = RoundedCornerShape(24.dp)) {
-                Text("繼續探索", fontSize = 14.sp)
-            }
-            Button(onClick = onShare,
-                modifier = Modifier.weight(1f).height(48.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)) {
-                Text("分享", color = Color.White, fontWeight = FontWeight.SemiBold)
-            }
+        // 儲存圖片
+        imgMsg?.let { Text(it, fontSize = 12.sp, color = Color(0xFF4CAF50)) }
+        Button(
+            onClick = {
+                imgMsg = if (saveBitmapToGallery(context, bitmap)) "✓ 已儲存至相簿"
+                         else "儲存失敗，請再試"
+            },
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5C3D1E))
+        ) {
+            Text("儲存圖片", color = Color.White, fontWeight = FontWeight.SemiBold)
         }
-    }
-}
 
-@Composable
-private fun ShareStatItem(value: String, label: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
-        Text(label, fontSize = 11.sp, color = Color(0xFF9E8E7A))
+        Spacer(Modifier.height(10.dp))
+
+        // 下載 GPX
+        gpxMsg?.let { Text(it, fontSize = 12.sp, color = Color(0xFF4CAF50)) }
+        OutlinedButton(
+            onClick = {
+                gpxMsg = if (saveGpxToDownloads(context, trackPoints)) "✓ GPX 已存至下載資料夾"
+                          else "下載失敗，請再試"
+            },
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = RoundedCornerShape(24.dp)
+        ) {
+            Text("下載 GPX 軌跡", fontSize = 14.sp)
+        }
+
+        Spacer(Modifier.height(12.dp))
+        TextButton(onClick = onDismiss) {
+            Text("關閉", color = Color(0xFF888888))
+        }
     }
 }
 
