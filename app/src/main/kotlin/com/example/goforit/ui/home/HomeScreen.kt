@@ -25,6 +25,7 @@ import com.example.goforit.data.Heritage
 import com.example.goforit.data.HeritageRepository
 import com.example.goforit.data.MapBuildRepository
 import com.example.goforit.data.RestorationRepository
+import com.example.goforit.ui.applyWarmMapStyle
 import com.mapbox.geojson.Feature
 import com.mapbox.geojson.FeatureCollection
 import com.mapbox.geojson.Point
@@ -133,6 +134,7 @@ fun HomeScreen() {
                 factory = {
                     mapView.apply {
                         mapboxMap.loadStyleUri(Style.MAPBOX_STREETS) {
+                            applyWarmMapStyle(it)
                             mapboxMap.setCamera(
                                 CameraOptions.Builder()
                                     .center(Point.fromLngLat(120.2028, 23.0000))

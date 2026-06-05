@@ -21,6 +21,7 @@ import com.example.goforit.data.HeritageRepository
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.RouteRepository
 import com.example.goforit.data.SilverSaltStore
+import com.example.goforit.ui.applyWarmMapStyle
 import com.example.goforit.ui.home.OrangeAccent
 import com.example.goforit.ui.home.TextGray
 import com.example.goforit.ui.home.rememberLocationPermission
@@ -168,6 +169,7 @@ fun RunScreen() {
                 factory = {
                     mapView.apply {
                         mapboxMap.loadStyleUri(Style.MAPBOX_STREETS) {
+                            applyWarmMapStyle(it)
                             mapboxMap.setCamera(
                                 CameraOptions.Builder()
                                     .center(Point.fromLngLat(120.2028, 23.0000))
