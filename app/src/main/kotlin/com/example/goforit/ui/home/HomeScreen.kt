@@ -59,7 +59,7 @@ private const val BUILT_BUILDINGS_ROOF_LAYER_ID = "built-heritage-buildings-roof
 private const val BUILT_BUILDINGS_TOWER_LAYER_ID = "built-heritage-towers-layer"
 private const val BUILT_BUILDING_SIZE_METERS = 145.0
 
-enum class HeritageFilter { ALL, RESTORED, PENDING }
+enum class HeritageFilter { ALL, RESTORED, PENDING, BUILT }
 
 @Composable
 fun HomeScreen() {
@@ -78,6 +78,7 @@ fun HomeScreen() {
         HeritageFilter.ALL -> heritages
         HeritageFilter.RESTORED -> heritages.filter { it.id in restoredIds }
         HeritageFilter.PENDING -> heritages.filter { it.id !in restoredIds }
+        HeritageFilter.BUILT -> heritages.filter { it.id in builtIds }
     }
     var markerManager by remember { mutableStateOf<CircleAnnotationManager?>(null) }
     val markerLookup = remember { mutableMapOf<String, Heritage>() }

@@ -49,6 +49,7 @@ fun MapHeritageSection(
         HeritageFilter.ALL -> heritages
         HeritageFilter.RESTORED -> heritages.filter { it.id in restoredAtById }
         HeritageFilter.PENDING -> heritages.filter { it.id !in restoredAtById }
+        HeritageFilter.BUILT -> heritages.filter { it.id in builtIds }
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -93,8 +94,9 @@ fun MapHeritageSection(
             item {
                 StatusChip(
                     text = "已創建 $builtCount",
-                    active = false,
-                    indicatorColor = Color(0xFF9B6A3F)
+                    active = selectedFilter == HeritageFilter.BUILT,
+                    indicatorColor = Color(0xFF9B6A3F),
+                    onClick = { onFilterChange(HeritageFilter.BUILT) }
                 )
             }
         }
