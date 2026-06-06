@@ -88,7 +88,7 @@ fun HeritageUnlockCard(
     }
 }
 
-// 停止確認對話框：避免不小心結束跑程
+// 結束旅程確認對話框（選擇路線跑步按暫停時出現）
 @Composable
 fun StopConfirmDialog(
     onConfirm: () -> Unit,
@@ -97,7 +97,7 @@ fun StopConfirmDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("要結束跑程嗎？", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            Text("要結束旅程嗎？", fontWeight = FontWeight.Bold, fontSize = 17.sp)
         },
         confirmButton = {
             Button(

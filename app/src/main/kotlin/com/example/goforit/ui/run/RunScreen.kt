@@ -48,14 +48,15 @@ import kotlin.math.sqrt
 private sealed class RunNav {
     object Main        : RunNav()
     object SavedRoutes : RunNav()
-    data class RoutePreview(val points: List<Point>, val distanceKm: Float) : RunNav()
-    data class Summary(                    // 選擇路線跑完後的結算頁
+    data class RoutePreview(val points: List<Point>, val distanceKm: Float, val gpxContent: String = "") : RunNav()
+    data class Summary(
         val trackPoints: List<Point>,
         val routePoints: List<Point>,
         val coveredKm: Float,
         val elapsedSeconds: Int,
         val unlockedHeritages: List<Heritage>,
-        val silverEarned: Int
+        val silverEarned: Int,
+        val routeName: String             // 與存進 Firestore 的名稱一致
     ) : RunNav()
 }
 
@@ -81,6 +82,7 @@ fun RunScreen() {
     val pointCount         = tracker.points.size   // 觀察 GPS 新點，觸發 update block
     val unlockedDuringRun  = remember { mutableStateListOf<Int>() }
     var selectedRoutePoints by remember { mutableStateOf<List<Point>>(emptyList()) }
+    var selectedRouteGpx    by remember { mutableStateOf("") }   // 原始 GPX 字串，跑完存進紀錄
     var notifHeritage       by remember { mutableStateOf<Heritage?>(null) }
     var showStopDialog      by remember { mutableStateOf(false) }
     val silverPoints        by SilverSaltStore.points(context)
@@ -146,7 +148,7 @@ fun RunScreen() {
         is RunNav.SavedRoutes -> {
             SavedRoutesScreen(
                 onBack = { nav = RunNav.Main },
-                onGpxLoaded = { pts, dist -> nav = RunNav.RoutePreview(pts, dist) }
+                onGpxLoaded = { pts, dist, gpx -> nav = RunNav.RoutePreview(pts, dist, gpx) }
             )
             return
         }
@@ -156,7 +158,8 @@ fun RunScreen() {
                 distanceKm = n.distanceKm,
                 onBack = { nav = RunNav.SavedRoutes },
                 onStartRun = {
-                    selectedRoutePoints = n.points   // 保存 GPX 路線供地圖顯示
+                    selectedRoutePoints = n.points      // 保存 GPX 路線供地圖顯示
+                    selectedRouteGpx    = n.gpxContent  // 保存原始 GPX，跑完存進紀錄
                     elapsedSeconds = 0
                     unlockedDuringRun.clear()
                     if (locationGranted) tracker.start()
@@ -168,13 +171,14 @@ fun RunScreen() {
         }
         is RunNav.Summary -> {
             RunSummaryScreen(
-                trackPoints = n.trackPoints,
-                routePoints = n.routePoints,
-                coveredKm = n.coveredKm,
-                elapsedSeconds = n.elapsedSeconds,
+                trackPoints      = n.trackPoints,
+                routePoints      = n.routePoints,
+                coveredKm        = n.coveredKm,
+                elapsedSeconds   = n.elapsedSeconds,
                 unlockedHeritages = n.unlockedHeritages,
-                silverEarned = n.silverEarned,
-                onFinish = { nav = RunNav.Main }
+                silverEarned     = n.silverEarned,
+                initialRouteName = n.routeName,
+                onFinish         = { nav = RunNav.Main }
             )
             return
         }
@@ -183,8 +187,15 @@ fun RunScreen() {
 
     Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
 
-        // ── 頁首：選了路線跑步時隱藏；直接跑步時顯示標題、統計列或暫停確認 ───
-        if (selectedRoutePoints.isEmpty()) {
+        // ── 頁首：路線跑步時顯示銀鹽+統計；直接跑步時顯示標題或暫停確認 ───
+        if (selectedRoutePoints.isNotEmpty() && phase != RunPhase.PRE_RUN) {
+            // 路線跑步頂部：時光銀鹽 banner + 距離/時間統計
+            RouteRunningTopPanel(
+                silverPoints   = silverPoints,
+                coveredKm      = coveredKm,
+                elapsedSeconds = elapsedSeconds
+            )
+        } else if (selectedRoutePoints.isEmpty()) {
             when (phase) {
                 RunPhase.PRE_RUN -> Box(
                     modifier = Modifier.fillMaxWidth().background(Color.White)
@@ -237,15 +248,18 @@ fun RunScreen() {
                         Spacer(Modifier.width(4.dp))
                         Button(
                             onClick = {
+                                val pts     = tracker.points.toList()
+                                val runName = "台南${detectRegion(pts)}探索"
                                 val summary = RunNav.Summary(
-                                    trackPoints       = tracker.points.toList(),
+                                    trackPoints       = pts,
                                     routePoints       = emptyList(),
                                     coveredKm         = coveredKm,
                                     elapsedSeconds    = elapsedSeconds,
                                     unlockedHeritages = heritages.filter { it.id in unlockedDuringRun },
-                                    silverEarned      = unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD
+                                    silverEarned      = unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD,
+                                    routeName         = runName
                                 )
-                                RouteRepository.addRun(tracker.points.toList())
+                                RouteRepository.addRun(runName, pts)
                                 tracker.stop()
                                 notifHeritage = null
                                 phase = RunPhase.PRE_RUN
@@ -344,23 +358,31 @@ fun RunScreen() {
                     }
                 }
             } else if (selectedRoutePoints.isNotEmpty()) {
-                // ── 選擇路線跑步：統計列 + 古蹟解鎖通知 ────────────────────
-                Column(modifier = Modifier.align(Alignment.BottomCenter)) {
-                    notifHeritage?.let { h ->
+                // 解鎖通知卡浮在地圖底部（有解鎖才顯示）
+                notifHeritage?.let { h ->
+                    Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
                         HeritageUnlockCard(
                             heritage = h,
                             silverReward = HERITAGE_UNLOCK_REWARD,
                             onDismiss = { notifHeritage = null }
                         )
                     }
-                    RunningStatsBar(
-                        coveredKm = coveredKm,
-                        elapsedSeconds = elapsedSeconds,
-                        onStop = { showStopDialog = true }
-                    )
                 }
             }
             // 直接跑步：地圖內無 overlay
+        }
+
+        // ── 路線跑步底部面板（地圖下方：Podcast + 最近古蹟 + 按鈕）─────────
+        if (selectedRoutePoints.isNotEmpty() && phase != RunPhase.PRE_RUN) {
+            RouteRunningBottomPanel(
+                routePoints        = selectedRoutePoints,
+                heritages          = heritages,
+                nearestHeritage    = nearestHeritage,
+                distanceToNearestM = distanceToNearestM,
+                unlockedIds        = restoredIds + unlockedDuringRun.toSet(),
+                onPause            = { showStopDialog = true },
+                onStop             = { showStopDialog = true }
+            )
         }
 
         // ── 直接跑步底部：古蹟卡 + 暫停按鈕（地圖外） ──────────────────────
@@ -383,7 +405,7 @@ fun RunScreen() {
             }
             if (phase == RunPhase.RUNNING) {
                 Button(
-                    onClick = { showStopDialog = false; phase = RunPhase.PAUSED },
+                    onClick = { showStopDialog = true },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = RoundedCornerShape(0.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)
@@ -395,22 +417,27 @@ fun RunScreen() {
         }
     }
 
-    // ── 停止確認對話框（選路線跑步專用，直接跑步改用 PAUSED 狀態）────────────
-    if (showStopDialog && selectedRoutePoints.isNotEmpty()) {
+    // ── 停止確認對話框（直接跑步 + 選路線跑步共用）──────────────────────────
+    if (showStopDialog) {
         StopConfirmDialog(
             onConfirm = {
                 showStopDialog = false
+                // 用 GPS 軌跡（或路線點備援）推算地區，生成與結算頁相同的名稱
+                val pts     = tracker.points.toList().ifEmpty { selectedRoutePoints }
+                val runName = "台南${detectRegion(pts)}探索"
                 val summary = RunNav.Summary(
                     trackPoints       = tracker.points.toList(),
                     routePoints       = selectedRoutePoints.toList(),
                     coveredKm         = coveredKm,
                     elapsedSeconds    = elapsedSeconds,
                     unlockedHeritages = heritages.filter { it.id in unlockedDuringRun },
-                    silverEarned      = unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD
+                    silverEarned      = unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD,
+                    routeName         = runName
                 )
-                RouteRepository.addRun(tracker.points.toList())
+                RouteRepository.addRun(runName, tracker.points.toList(), selectedRouteGpx)
                 tracker.stop()
                 selectedRoutePoints = emptyList()
+                selectedRouteGpx    = ""
                 notifHeritage = null
                 phase = RunPhase.PRE_RUN
                 nav = summary

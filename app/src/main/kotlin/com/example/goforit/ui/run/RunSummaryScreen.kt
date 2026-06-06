@@ -33,6 +33,9 @@ import com.mapbox.maps.Style
 import com.mapbox.maps.plugin.annotation.annotations
 import com.mapbox.maps.plugin.annotation.generated.PolylineAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.createPolylineAnnotationManager
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,12 +46,25 @@ fun RunSummaryScreen(
     elapsedSeconds: Int,
     unlockedHeritages: List<Heritage>,
     silverEarned: Int,
+    initialRouteName: String,   // 由 RunScreen 傳入，與存進 Firestore 的名稱一致
     onFinish: () -> Unit
 ) {
     val context        = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val mapView        = remember { MapView(context) }
     var showShareSheet by remember { mutableStateOf(false) }
+
+    // 地區用於副標題（日期 · 地區）
+    val region = remember(trackPoints, routePoints) {
+        detectRegion(trackPoints.ifEmpty { routePoints })
+    }
+    val dateStr = remember {
+        SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()).format(Date())
+    }
+    // 初始名稱來自 RunScreen（與 Firestore 記錄一致）；使用者可在此頁編輯
+    var routeName        by remember { mutableStateOf(initialRouteName) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var editingName      by remember { mutableStateOf("") }
 
     DisposableEffect(lifecycleOwner) {
         val obs = object : DefaultLifecycleObserver {
@@ -64,12 +80,25 @@ fun RunSummaryScreen(
 
         // ── 頂部列 ──────────────────────────────────────────────────────
         Box(modifier = Modifier.fillMaxWidth().background(Color.White)
-            .padding(horizontal = 8.dp, vertical = 12.dp)) {
+            .padding(horizontal = 8.dp, vertical = 10.dp)) {
             TextButton(onClick = onFinish, modifier = Modifier.align(Alignment.CenterStart)) {
                 Text("← 返回", color = Color(0xFF1A1A1A), fontSize = 14.sp)
             }
-            Text("跑步結算", fontWeight = FontWeight.Bold, fontSize = 17.sp,
-                modifier = Modifier.align(Alignment.Center))
+            // 路線名稱（可編輯）+ 日期/地區小字
+            Column(modifier = Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(routeName, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Spacer(Modifier.width(2.dp))
+                    IconButton(
+                        onClick = { editingName = routeName; showRenameDialog = true },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Text("✏", fontSize = 13.sp, color = Color(0xFF888888))
+                    }
+                }
+                Text("$dateStr · $region", fontSize = 11.sp, color = Color(0xFF888888))
+            }
         }
 
         // ── 地圖 ────────────────────────────────────────────────────────
@@ -183,6 +212,31 @@ fun RunSummaryScreen(
                 Text("分享", color = Color.White, fontWeight = FontWeight.SemiBold)
             }
         }
+    }
+
+    // ── 重新命名路線對話框 ──────────────────────────────────────────────
+    if (showRenameDialog) {
+        AlertDialog(
+            onDismissRequest = { showRenameDialog = false },
+            title = { Text("重新命名路線", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+            text = {
+                OutlinedTextField(
+                    value = editingName,
+                    onValueChange = { editingName = it },
+                    singleLine = true,
+                    label = { Text("路線名稱") }
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (editingName.isNotBlank()) routeName = editingName
+                    showRenameDialog = false
+                }) { Text("確認") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenameDialog = false }) { Text("取消") }
+            }
+        )
     }
 
     // ── 分享底頁：預覽成就圖片 + 儲存/下載 ────────────────────────────
@@ -338,5 +392,22 @@ private fun SummaryStatItem(value: String, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2C2218))
         Text(label, fontSize = 12.sp, color = Color(0xFF888888))
+    }
+}
+
+// 依路線中心點的經緯度，推算最接近的台南行政區名稱
+internal fun detectRegion(points: List<Point>): String {
+    if (points.isEmpty()) return "台南市"
+    val lat = points.map { it.latitude() }.average()
+    val lng = points.map { it.longitude() }.average()
+    return when {
+        lng < 120.17             -> "安平區"
+        lat > 23.04              -> "安南區"
+        lat > 23.01 && lng < 120.21 -> "北區"
+        lat > 23.01              -> "永康區"
+        lng < 120.20             -> "中西區"
+        lng < 120.22             -> "東區"
+        lat < 22.98              -> "南區"
+        else                     -> "台南市區"
     }
 }

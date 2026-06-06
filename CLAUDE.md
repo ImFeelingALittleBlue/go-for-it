@@ -48,7 +48,7 @@ Figma 設計稿：https://www.figma.com/design/DvrclsHl9R2hLEpDAoHhdk/Untitled?n
 
 > ⚠️ `local.properties` 已加入 `.gitignore`，協作者須自行建立（見 Readme.md）
 
-## 目前狀態（2026-05-31）
+## 目前狀態（2026-06-06）
 - [x] 專案 Gradle 架構建立完成
 - [x] 所有依賴設定完成（Compose、Room、Mapbox、Firebase、Media3）
 - [x] Mapbox 兩個金鑰已設定（存於 local.properties，不進 git）
@@ -58,9 +58,15 @@ Figma 設計稿：https://www.figma.com/design/DvrclsHl9R2hLEpDAoHhdk/Untitled?n
 - [x] 首頁 UI：搜尋列 + Mapbox 地圖 + 附近古蹟列表（暫用假資料）
 - [x] GPS 定位權限請求 + 地圖藍點（`LocationPermission.kt`）
 - [x] 跑步畫面（去探索1）：地圖 + 古蹟標記 + 計時器 + GPS 軌跡折線 + 開始/停止
-- [x] 已儲存路線畫面（去探索2）：路線清單 + GPX 上傳按鈕
+- [x] 已儲存路線畫面（去探索2）：按愛心的路線清單 + GPX 臨時上傳按鈕
 - [x] GPX 路線匯入：XmlPullParser 解析 + Haversine 距離計算
 - [x] 路線預覽畫面（去探索3）：地圖折線 + 距離徽章 + AI 導覽佔位符 + 開始跑步
+- [x] **選擇路線跑步中 UI**（`RouteRunningPanel.kt`）：時光銀鹽頂部列 + 地圖 + AI Podcast 卡（進度點依路線古蹟排列）+ 最近古蹟 + 暫停按鈕
+- [x] **直接跑步中 UI**：暫停按下跳出「要結束旅程嗎？」對話框（繼續跑步 / 結束跑步）
+- [x] **跑步結算頁**：自動判斷地區命名（台南中西區探索）+ 右側鉛筆改名 + 日期/地區副標
+- [x] **紀錄頁面**（`CollectionScreen.kt`）：跑完自動儲存 + 愛心收藏 + 刪除按鈕
+- [x] **已儲存路線**（`SavedRoutesScreen.kt`）：只顯示按愛心的紀錄，點擊直接載入原始 GPX 重跑
+- [x] GPX 原始內容隨紀錄存進 Firestore，按愛心後不需重新上傳即可再次選路線跑步
 - [ ] Room DB：從 metadata.csv 匯入古蹟資料
 - [ ] 古蹟觸發：進入 40m 範圍自動播放語音
 - [ ] AI 語音導覽：Firebase Functions + Claude API 生成旁白
@@ -85,11 +91,14 @@ app/src/main/kotlin/com/example/goforit/
     ├── run/
     │   ├── RunScreen.kt               ← 去探索主畫面（地圖 + 計時 + 軌跡）
     │   ├── RunTracker.kt              ← GPS 軌跡記錄（LocationManager）
-    │   ├── SavedRoutesScreen.kt       ← 去探索2：已儲存路線 + GPX 上傳
+    │   ├── RunningOverlay.kt          ← 跑步中共用元件（統計列、解鎖通知、對話框）
+    │   ├── RouteRunningPanel.kt       ← 選擇路線跑步中的頂部/底部面板
+    │   ├── RunSummaryScreen.kt        ← 跑步結算頁（地圖 + 統計 + 命名 + 分享）
+    │   ├── SavedRoutesScreen.kt       ← 已儲存路線（愛心收藏清單 + GPX 上傳）
     │   ├── GpxParser.kt               ← GPX 解析（XmlPullParser + Haversine）
-    │   └── RoutePreviewScreen.kt      ← 去探索3：路線預覽 + 開始跑步
+    │   └── RoutePreviewScreen.kt      ← 路線預覽 + 開始跑步
     ├── collection/
-    │   └── CollectionScreen.kt        ← 收藏畫面（待實作）
+    │   └── CollectionScreen.kt        ← 紀錄頁（跑步紀錄 + 愛心 + 刪除）
     ├── map/
     │   └── MapScreen.kt               ← 地圖畫面（帳號頁暫用）
     └── theme/

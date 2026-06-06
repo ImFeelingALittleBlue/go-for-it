@@ -9,5 +9,6 @@ data class RouteRecord(
     val distanceMeters: Double = 0.0,
     val pointCount: Int = 0,
     val startedAt: Long = 0L,
-    val recordedAt: Long = 0L
+    val recordedAt: Long = 0L,
+    val liked: Boolean = false   // 使用者在紀錄頁按愛心 → 出現在已儲存路線
 )
