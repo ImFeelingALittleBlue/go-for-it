@@ -68,6 +68,7 @@ import kotlinx.coroutines.withContext
 private const val BUILD_COST = 100
 
 private enum class QuizState { ASKING, CORRECT, WRONG }
+private enum class BuildState { READY, BUILDING }
 
 @Composable
 fun HeritageDetailSheet(
@@ -83,13 +84,31 @@ fun HeritageDetailSheet(
     val isBuilt = MapBuildRepository.records().any { it.heritageId == heritage.id }
     var quizState by remember(heritage.id) { mutableStateOf<QuizState?>(null) }
     var showOldPhoto by remember(heritage.id) { mutableStateOf(false) }
+    var buildState by remember(heritage.id) { mutableStateOf(BuildState.READY) }
+    var buildProgress by remember(heritage.id) { mutableStateOf(0f) }
     var locationGranted by remember { mutableStateOf(false) }
     val hasLocationPermission = rememberLocationPermission { locationGranted = true }
     val isNearHeritage by rememberIsNearHeritage(
         heritage = heritage,
         hasLocationPermission = hasLocationPermission || locationGranted
     )
-    val needsMoreSilver = isRestored && !isBuilt && points < BUILD_COST
+    val needsMoreSilver = isRestored &&
+        !isBuilt &&
+        points < BUILD_COST &&
+        buildState != BuildState.BUILDING
+    val canBuild = isRestored &&
+        !isBuilt &&
+        (points >= BUILD_COST || buildState == BuildState.BUILDING)
+
+    LaunchedEffect(buildState) {
+        if (buildState == BuildState.BUILDING) {
+            for (step in 1..100) {
+                buildProgress = step / 100f
+                kotlinx.coroutines.delay(18L)
+            }
+            MapBuildRepository.add(heritage)
+        }
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -146,6 +165,21 @@ fun HeritageDetailSheet(
                             points = points,
                             onQuizClick = {
                                 quizState = QuizState.ASKING
+                            }
+                        )
+                    } else if (canBuild && !showOldPhoto) {
+                        ReadyToBuildHero(
+                            points = points,
+                            state = buildState,
+                            progress = buildProgress,
+                            onBuild = {
+                                if (
+                                    buildState == BuildState.READY &&
+                                    SilverSaltStore.spend(context, BUILD_COST)
+                                ) {
+                                    buildProgress = 0f
+                                    buildState = BuildState.BUILDING
+                                }
                             }
                         )
                     } else if (isRestored) {
@@ -221,7 +255,9 @@ fun HeritageDetailSheet(
                             },
                             shortageMode = needsMoreSilver || quizState != null,
                             showingOldPhoto = showOldPhoto,
-                            quizActive = quizState != null
+                            quizActive = quizState != null,
+                            buildPanelMode = canBuild,
+                            building = buildState == BuildState.BUILDING
                         )
                     }
                 }
@@ -390,6 +426,81 @@ private fun InsufficientSilverHero(
                 )
             ) {
                 Text("以問答補足")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReadyToBuildHero(
+    points: Int,
+    state: BuildState,
+    progress: Float,
+    onBuild: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(280.dp)
+            .background(Color(0xFF777777))
+    ) {
+        PerspectiveGrid(modifier = Modifier.fillMaxSize())
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(horizontal = 48.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Surface(
+                modifier = Modifier.height(68.dp),
+                shape = RoundedCornerShape(50),
+                color = Color(0xFFF8F3EB)
+            ) {
+                Box(
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Business,
+                        contentDescription = null,
+                        tint = Color(0xFF6A625B)
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(
+                if (state == BuildState.BUILDING) "創建中…請稍候" else "創建於我的地圖！",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(10.dp))
+
+            if (state == BuildState.BUILDING) {
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp),
+                    color = Color(0xFFF6E5B5),
+                    trackColor = Color(0xFFD0CDC7)
+                )
+                Spacer(Modifier.height(6.dp))
+                Text("${(progress * 100).toInt()}%", color = Color.White, fontSize = 11.sp)
+            } else {
+                SilverProgressCard(points = points)
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    onClick = onBuild,
+                    shape = RoundedCornerShape(22.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFF8F3EB),
+                        contentColor = Color(0xFF52743E)
+                    )
+                ) {
+                    Text("創建")
+                }
             }
         }
     }
@@ -595,7 +706,9 @@ private fun HeritageActionButton(
     onNeedSilver: () -> Unit,
     shortageMode: Boolean,
     showingOldPhoto: Boolean,
-    quizActive: Boolean
+    quizActive: Boolean,
+    buildPanelMode: Boolean,
+    building: Boolean
 ) {
     when {
         !isRestored -> {
@@ -634,6 +747,23 @@ private fun HeritageActionButton(
             ) {
                 Text(
                     if (showingOldPhoto && !quizActive) "返回創建地圖" else "查看舊照片",
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+            }
+        }
+        buildPanelMode -> {
+            Button(
+                onClick = onNeedSilver,
+                enabled = !building,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF9B6A3F),
+                    disabledContainerColor = Color(0xFFC9C9C9)
+                )
+            ) {
+                Text(
+                    if (showingOldPhoto) "返回創建地圖" else "查看舊照片",
                     modifier = Modifier.padding(vertical = 4.dp)
                 )
             }
