@@ -34,6 +34,8 @@ object HeritageRepository {
                         description = cols[11],
                         lat = lat,
                         lng = lng,
+                        heading = cols[4].toDoubleOrNull() ?: 0.0,
+                        pitch = cols[5].toDoubleOrNull() ?: 0.0,
                         // photo_file 是「tainan_old_photos/photos/001_xxx.png」這種路徑，
                         // 只取最後的檔名（substringAfterLast('/')）
                         photoFile = cols[14].substringAfterLast('/')

@@ -28,6 +28,8 @@ android {
         }
         resValue("string", "mapbox_access_token",
             localProps.getProperty("MAPBOX_PUBLIC_TOKEN", ""))
+        resValue("string", "street_view_api_key",
+            localProps.getProperty("GOOGLE_MAPS_API_KEY", ""))
     }
 
     buildTypes {

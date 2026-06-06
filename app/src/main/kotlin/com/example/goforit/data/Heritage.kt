@@ -9,5 +9,7 @@ data class Heritage(
     val description: String,  // 描述
     val lat: Double,          // 緯度
     val lng: Double,          // 經度
+    val heading: Double,      // 現代街景的觀看方向
+    val pitch: Double,        // 現代街景的垂直視角
     val photoFile: String     // 老照片檔名（修復後解鎖顯示，例 001_1500001_大北門.png）
 )
