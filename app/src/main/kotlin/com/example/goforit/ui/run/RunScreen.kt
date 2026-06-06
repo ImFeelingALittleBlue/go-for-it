@@ -21,7 +21,6 @@ import com.example.goforit.data.Heritage
 import com.example.goforit.data.HeritageRepository
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.RouteRepository
-import com.example.goforit.data.SilverSaltStore
 import com.example.goforit.ui.applyWarmMapStyle
 import com.example.goforit.ui.home.OrangeAccent
 import com.example.goforit.ui.home.TextGray
@@ -62,7 +61,6 @@ private sealed class RunNav {
 // 跑步的兩個階段
 private enum class RunPhase { PRE_RUN, RUNNING, PAUSED }
 private const val HERITAGE_UNLOCK_RADIUS_METERS = 40.0
-private const val HERITAGE_UNLOCK_REWARD = 25
 
 @Composable
 fun RunScreen() {
@@ -80,12 +78,32 @@ fun RunScreen() {
     var routeLineManager   by remember { mutableStateOf<PolylineAnnotationManager?>(null) }
     val pointCount         = tracker.points.size   // 觀察 GPS 新點，觸發 update block
     val unlockedDuringRun  = remember { mutableStateListOf<Int>() }
+    val podcastRequestedDuringRun = remember { mutableStateListOf<Int>() }
     // 選擇路線後儲存 GPX 點位，供地圖顯示與停止後清空
     var selectedRoutePoints by remember { mutableStateOf<List<Point>>(emptyList()) }
     // 剛解鎖的古蹟，用於顯示通知卡
     var notifHeritage       by remember { mutableStateOf<Heritage?>(null) }
     // 停止確認對話框（直接跑步模式使用）
     var showStopDialog      by remember { mutableStateOf(false) }
+    val podcastPlayer = remember {
+        DefaultPodcastPlayer(
+            context = context,
+            onPlaybackStarted = { heritageId ->
+                val heritage = heritages.firstOrNull { it.id == heritageId }
+                    ?: return@DefaultPodcastPlayer
+                if (!RestorationRepository.isRestored(heritageId)) {
+                    RestorationRepository.add(heritage)
+                }
+                if (heritageId !in unlockedDuringRun) {
+                    unlockedDuringRun.add(heritageId)
+                    notifHeritage = heritage
+                }
+            },
+            onPlaybackFailed = { heritageId ->
+                podcastRequestedDuringRun.remove(heritageId)
+            }
+        )
+    }
     // 即時計算已跑距離（每新增一個 GPS 點就重算）
     val coveredKm = remember(pointCount) {
         if (tracker.points.size < 2) 0f
@@ -103,7 +121,12 @@ fun RunScreen() {
             override fun onDestroy(owner: LifecycleOwner) { mapView.onDestroy() }
         }
         lifecycleOwner.lifecycle.addObserver(obs)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(obs); tracker.stop(); mapView.onDestroy() }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(obs)
+            tracker.stop()
+            podcastPlayer.release()
+            mapView.onDestroy()
+        }
     }
 
     LaunchedEffect(phase) {
@@ -115,9 +138,11 @@ fun RunScreen() {
     LaunchedEffect(pointCount, phase) {
         if (phase != RunPhase.RUNNING || pointCount == 0) return@LaunchedEffect
         val latest = tracker.points.last()
-        val restoredIds = RestorationRepository.records().map { it.heritageId }.toSet()
         heritages
-            .filter { it.id !in restoredIds && it.id !in unlockedDuringRun }
+            .filter {
+                !RestorationRepository.isRestored(it.id) &&
+                    it.id !in podcastRequestedDuringRun
+            }
             .firstOrNull { heritage ->
                 distanceMeters(
                     latest.latitude(),
@@ -127,10 +152,8 @@ fun RunScreen() {
                 ) <= HERITAGE_UNLOCK_RADIUS_METERS
             }
             ?.let { heritage ->
-                unlockedDuringRun.add(heritage.id)
-                RestorationRepository.add(heritage)
-                SilverSaltStore.add(context, HERITAGE_UNLOCK_REWARD)
-                notifHeritage = heritage   // 觸發底部通知卡
+                podcastRequestedDuringRun.add(heritage.id)
+                podcastPlayer.play(heritage)
             }
     }
 
@@ -152,6 +175,7 @@ fun RunScreen() {
                     selectedRoutePoints = n.points   // 保存 GPX 路線供地圖顯示
                     elapsedSeconds = 0
                     unlockedDuringRun.clear()
+                    podcastRequestedDuringRun.clear()
                     if (locationGranted) tracker.start()
                     phase = RunPhase.RUNNING
                     nav = RunNav.Main
@@ -235,10 +259,11 @@ fun RunScreen() {
                                     coveredKm         = coveredKm,
                                     elapsedSeconds    = elapsedSeconds,
                                     unlockedHeritages = heritages.filter { it.id in unlockedDuringRun },
-                                    silverEarned      = unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD
+                                    silverEarned      = 0
                                 )
                                 RouteRepository.addRun(tracker.points.toList())
                                 tracker.stop()
+                                podcastPlayer.stop()
                                 notifHeritage = null
                                 phase = RunPhase.PRE_RUN
                                 nav = summary
@@ -338,6 +363,7 @@ fun RunScreen() {
                         onClick = {
                             elapsedSeconds = 0
                             unlockedDuringRun.clear()
+                            podcastRequestedDuringRun.clear()
                             if (locationGranted) tracker.start()
                             phase = RunPhase.RUNNING
                         },
@@ -354,7 +380,6 @@ fun RunScreen() {
                     notifHeritage?.let { h ->
                         HeritageUnlockCard(
                             heritage = h,
-                            silverReward = HERITAGE_UNLOCK_REWARD,
                             onDismiss = { notifHeritage = null }
                         )
                     }
@@ -370,7 +395,6 @@ fun RunScreen() {
                     Column(modifier = Modifier.align(Alignment.BottomCenter)) {
                         HeritageUnlockCard(
                             heritage = h,
-                            silverReward = HERITAGE_UNLOCK_REWARD,
                             onDismiss = { notifHeritage = null }
                         )
                     }
@@ -390,10 +414,11 @@ fun RunScreen() {
                     coveredKm         = coveredKm,
                     elapsedSeconds    = elapsedSeconds,
                     unlockedHeritages = heritages.filter { it.id in unlockedDuringRun },
-                    silverEarned      = unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD
+                    silverEarned      = 0
                 )
                 RouteRepository.addRun(tracker.points.toList())
                 tracker.stop()
+                podcastPlayer.stop()
                 selectedRoutePoints = emptyList()
                 notifHeritage = null
                 phase = RunPhase.PRE_RUN

@@ -53,7 +53,6 @@ fun RunningStatsBar(
 @Composable
 fun HeritageUnlockCard(
     heritage: Heritage,
-    silverReward: Int,
     onDismiss: () -> Unit
 ) {
     Surface(
@@ -68,15 +67,7 @@ fun HeritageUnlockCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(heritage.name, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 Spacer(Modifier.height(2.dp))
-                Text("古蹟解鎖！", fontSize = 12.sp, color = Color(0xFF888888))
-            }
-            // 銀鹽獎勵徽章
-            Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFFFFF3E0)) {
-                Text(
-                    "+$silverReward 銀鹽",
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    color = Color(0xFFD4822A), fontSize = 13.sp, fontWeight = FontWeight.Bold
-                )
+                Text("Podcast 已播放，舊照片解鎖！", fontSize = 12.sp, color = Color(0xFF888888))
             }
             Spacer(Modifier.width(8.dp))
             TextButton(onClick = onDismiss) {

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.CircularProgressIndicator
@@ -74,6 +75,8 @@ fun HeritageDetailSheet(
         .firstOrNull { it.heritageId == heritage.id }
     val isRestored = restorationRecord != null
     val isBuilt = MapBuildRepository.records().any { it.heritageId == heritage.id }
+    var showQuiz by remember(heritage.id) { mutableStateOf(false) }
+    var quizMessage by remember(heritage.id) { mutableStateOf<String?>(null) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -161,12 +164,38 @@ fun HeritageDetailSheet(
                                 if (SilverSaltStore.spend(context, BUILD_COST)) {
                                     MapBuildRepository.add(heritage)
                                 }
+                            },
+                            onNeedSilver = {
+                                quizMessage = null
+                                showQuiz = true
                             }
                         )
                     }
                 }
             }
         }
+    }
+
+    if (showQuiz) {
+        HeritageQuizDialog(
+            heritage = heritage,
+            message = quizMessage,
+            onAnswer = { isCorrect ->
+                if (isCorrect) {
+                    val missingPoints = (BUILD_COST - points).coerceAtLeast(0)
+                    if (missingPoints > 0) {
+                        SilverSaltStore.add(context, missingPoints)
+                    }
+                    if (SilverSaltStore.spend(context, BUILD_COST)) {
+                        MapBuildRepository.add(heritage)
+                    }
+                    showQuiz = false
+                } else {
+                    quizMessage = "答錯了，再想一下"
+                }
+            },
+            onDismiss = { showQuiz = false }
+        )
     }
 }
 
@@ -333,7 +362,8 @@ private fun HeritageActionButton(
     isRestored: Boolean,
     isBuilt: Boolean,
     points: Int,
-    onBuild: () -> Unit
+    onBuild: () -> Unit,
+    onNeedSilver: () -> Unit
 ) {
     when {
         !isRestored -> {
@@ -363,20 +393,92 @@ private fun HeritageActionButton(
         else -> {
             val enough = points >= BUILD_COST
             Button(
-                onClick = onBuild,
-                enabled = enough,
+                onClick = if (enough) onBuild else onNeedSilver,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9B6A3F))
             ) {
                 Text(
                     if (enough) "創建我的地圖（花費 $BUILD_COST 銀鹽）"
-                    else "銀鹽不足（需 $BUILD_COST，目前 $points）",
+                    else "銀鹽不足，回答問題取得銀鹽",
                     modifier = Modifier.padding(vertical = 4.dp)
                 )
             }
         }
     }
+}
+
+@Composable
+private fun HeritageQuizDialog(
+    heritage: Heritage,
+    message: String?,
+    onAnswer: (Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val answer = heritage.year.ifBlank { heritage.name }
+    val question = if (heritage.year.isNotBlank()) {
+        "這張「${heritage.name}」歷史照片標示的年代是？"
+    } else {
+        "你剛剛解鎖的這處古蹟名稱是？"
+    }
+    val choices = remember(heritage.id) {
+        if (heritage.year.isNotBlank()) {
+            buildYearChoices(heritage.year)
+        } else {
+            listOf(heritage.name, "臺南州廳", "赤崁樓").shuffled()
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("回答古蹟問題", fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                Text(question)
+                Spacer(Modifier.height(12.dp))
+                choices.forEach { choice ->
+                    Button(
+                        onClick = { onAnswer(choice == answer) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFE9DED2),
+                            contentColor = Color(0xFF3B2B21)
+                        )
+                    ) {
+                        Text(choice)
+                    }
+                }
+                message?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(it, color = Color(0xFFC24B3A), fontSize = 13.sp)
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                elevation = null
+            ) {
+                Text("取消", color = TextGray)
+            }
+        },
+        containerColor = Color(0xFFF8F3EB)
+    )
+}
+
+private fun buildYearChoices(year: String): List<String> {
+    val numericYear = year.toIntOrNull()
+    val distractors = if (numericYear != null) {
+        listOf((numericYear - 10).toString(), (numericYear + 10).toString())
+    } else {
+        listOf("1910", "1930")
+    }
+    return (listOf(year) + distractors.filter { it != year }).distinct().take(3).shuffled()
 }
 
 private fun formatUnlockTime(millis: Long): String =
