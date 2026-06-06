@@ -80,12 +80,19 @@ fun RunScreen() {
     var routeLineManager   by remember { mutableStateOf<PolylineAnnotationManager?>(null) }
     val pointCount         = tracker.points.size   // 觀察 GPS 新點，觸發 update block
     val unlockedDuringRun  = remember { mutableStateListOf<Int>() }
-    // 選擇路線後儲存 GPX 點位，供地圖顯示與停止後清空
     var selectedRoutePoints by remember { mutableStateOf<List<Point>>(emptyList()) }
-    // 剛解鎖的古蹟，用於顯示通知卡
     var notifHeritage       by remember { mutableStateOf<Heritage?>(null) }
-    // 停止確認對話框（直接跑步模式使用）
     var showStopDialog      by remember { mutableStateOf(false) }
+    val silverPoints        by SilverSaltStore.points(context)
+    val restoredIds         = RestorationRepository.records().map { it.heritageId }.toSet()
+    val nearestHeritage     = remember(pointCount) {
+        val from = tracker.points.lastOrNull() ?: Point.fromLngLat(120.2028, 23.0000)
+        heritages.minByOrNull { h -> distanceMeters(from.latitude(), from.longitude(), h.lat, h.lng) }
+    }
+    val distanceToNearestM  = remember(pointCount) {
+        val from = tracker.points.lastOrNull() ?: Point.fromLngLat(120.2028, 23.0000)
+        nearestHeritage?.let { h -> distanceMeters(from.latitude(), from.longitude(), h.lat, h.lng).toFloat() } ?: 999f
+    }
     // 即時計算已跑距離（每新增一個 GPS 點就重算）
     val coveredKm = remember(pointCount) {
         if (tracker.points.size < 2) 0f
@@ -188,30 +195,31 @@ fun RunScreen() {
                         Text("探索臺南古蹟", fontSize = 13.sp, color = TextGray)
                     }
                 }
-                RunPhase.RUNNING -> Box(
-                    modifier = Modifier.fillMaxWidth().background(Color.White)
-                        .padding(horizontal = 20.dp, vertical = 14.dp)
-                ) {
-                    Row(modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically) {
+                RunPhase.RUNNING -> Column {
+                    // 時光銀鹽 banner
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .background(Color(0xFFF5F0EB))
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(modifier = Modifier.size(34.dp), shape = RoundedCornerShape(50),
+                            color = Color(0xFF5C3D1E)) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Text("銀", color = Color(0xFFD4A96A), fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Spacer(Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("${"%.2f".format(coveredKm)} km",
-                                fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                            Text("距離", fontSize = 12.sp, color = TextGray)
+                            Text("時光銀鹽", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text("收集數量的進度累計", fontSize = 11.sp, color = TextGray)
                         }
-                        Column(modifier = Modifier.weight(1f),
-                            horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(formatTime(elapsedSeconds),
-                                fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                            Text("時間", fontSize = 12.sp, color = TextGray)
-                        }
-                        Button(
-                            onClick = { phase = RunPhase.PAUSED },
-                            shape = RoundedCornerShape(24.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5C3D1E)),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                        ) { Text("暫停", color = Color.White, fontWeight = FontWeight.SemiBold) }
+                        Text("+$silverPoints", fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold, color = OrangeAccent)
                     }
+                    // 統計列（無按鈕）
+                    DirectRunStatsRow(coveredKm, elapsedSeconds)
                 }
                 RunPhase.PAUSED -> Column {
                     // 橘色確認列
@@ -247,22 +255,7 @@ fun RunScreen() {
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5C3D1E))
                         ) { Text("結束跑步", color = Color.White, fontSize = 13.sp) }
                     }
-                    // 統計列（暫停時仍顯示）
-                    Row(modifier = Modifier.fillMaxWidth().background(Color.White)
-                        .padding(horizontal = 20.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("${"%.2f".format(coveredKm)} km",
-                                fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                            Text("距離", fontSize = 12.sp, color = TextGray)
-                        }
-                        Column(modifier = Modifier.weight(1f),
-                            horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(formatTime(elapsedSeconds),
-                                fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                            Text("時間", fontSize = 12.sp, color = TextGray)
-                        }
-                    }
+                    DirectRunStatsRow(coveredKm, elapsedSeconds)
                 }
             }
         }
@@ -364,16 +357,37 @@ fun RunScreen() {
                         onStop = { showStopDialog = true }
                     )
                 }
+            }
+            // 直接跑步：地圖內無 overlay
+        }
+
+        // ── 直接跑步底部：古蹟卡 + 暫停按鈕（地圖外） ──────────────────────
+        if (selectedRoutePoints.isEmpty() && phase != RunPhase.PRE_RUN) {
+            // 優先顯示解鎖通知，否則顯示最近古蹟預覽
+            if (notifHeritage != null) {
+                HeritageUnlockCard(
+                    heritage = notifHeritage!!,
+                    silverReward = HERITAGE_UNLOCK_REWARD,
+                    onDismiss = { notifHeritage = null }
+                )
             } else {
-                // ── 直接跑步：古蹟解鎖通知（有時才顯示）────────────────────
-                notifHeritage?.let { h ->
-                    Column(modifier = Modifier.align(Alignment.BottomCenter)) {
-                        HeritageUnlockCard(
-                            heritage = h,
-                            silverReward = HERITAGE_UNLOCK_REWARD,
-                            onDismiss = { notifHeritage = null }
-                        )
-                    }
+                nearestHeritage?.let { h ->
+                    NearestHeritagePreviewCard(
+                        heritage = h,
+                        distanceMeters = distanceToNearestM,
+                        isRestored = h.id in restoredIds
+                    )
+                }
+            }
+            if (phase == RunPhase.RUNNING) {
+                Button(
+                    onClick = { phase = RunPhase.PAUSED },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(0.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)
+                ) {
+                    Text("暫停", color = Color.White, fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold)
                 }
             }
         }
