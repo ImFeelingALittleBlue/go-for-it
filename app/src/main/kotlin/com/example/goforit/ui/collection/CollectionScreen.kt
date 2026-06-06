@@ -9,6 +9,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -111,7 +113,7 @@ private fun SectionLabel(text: String) {
     Text(text, fontSize = 13.sp, color = Gray, fontWeight = FontWeight.Medium)
 }
 
-// 單筆 GPX 路線紀錄卡片
+// 單筆跑步紀錄卡片：愛心收藏 + 刪除
 @Composable
 private fun RouteCard(record: RouteRecord) {
     Surface(shape = RoundedCornerShape(16.dp), color = Cream) {
@@ -122,15 +124,20 @@ private fun RouteCard(record: RouteRecord) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(record.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 Spacer(Modifier.height(4.dp))
-                Text("GPX · ${formatDistance(record.distanceMeters)} · ${record.pointCount} 點", fontSize = 12.sp, color = Brown)
+                Text("${formatDistance(record.distanceMeters)} · ${record.pointCount} 點",
+                    fontSize = 12.sp, color = Brown)
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    "匯入於 ${formatTime(record.recordedAt)}${startedAtText(record.startedAt)}",
-                    fontSize = 12.sp,
-                    color = Gray,
-                    maxLines = 2
+                Text(formatTime(record.recordedAt), fontSize = 12.sp, color = Gray)
+            }
+            // 愛心：按下後出現在「已儲存路線」，再按取消收藏
+            IconButton(onClick = { RouteRepository.toggleLike(record.docId, !record.liked) }) {
+                Icon(
+                    imageVector = if (record.liked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = if (record.liked) "取消收藏" else "收藏",
+                    tint = if (record.liked) Color(0xFFE91E63) else Gray
                 )
             }
+            // 刪除此筆紀錄
             IconButton(onClick = { RouteRepository.delete(record.docId) }) {
                 Icon(Icons.Default.DeleteOutline, contentDescription = "刪除", tint = Gray)
             }

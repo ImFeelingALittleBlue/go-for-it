@@ -78,17 +78,28 @@ object RouteRepository {
         collection()?.document(docId)?.delete()
     }
 
-    fun addRun(points: List<Point>) {
-        if (points.size < 2) return
+    // 切換愛心狀態：liked=true 時路線會出現在已儲存路線頁
+    fun toggleLike(docId: String, liked: Boolean) {
+        collection()?.document(docId)?.update("liked", liked)
+    }
+
+    fun addRun(name: String, points: List<Point>, routeGpx: String = "") {
         val now = System.currentTimeMillis()
-        val name = "跑步路線 ${SimpleDateFormat("M/d HH:mm", Locale.TAIWAN).format(Date(now))}"
-        val gpx = buildGpx(name, points, now)
+        // 優先用原始 GPX（路線匯入跑步）；否則從 GPS 軌跡生成；都沒有則空白
+        val gpx = when {
+            routeGpx.isNotBlank()  -> routeGpx
+            points.size >= 2       -> buildGpx(name, points, now)
+            else                   -> ""
+        }
         val routePoints = points.map { RoutePoint(it.latitude(), it.longitude()) }
+        val dist = if (routePoints.size >= 2)
+            routePoints.zipWithNext().sumOf { (a, b) -> distanceMeters(a, b) }
+        else 0.0
         val data = hashMapOf(
             "name" to name,
             "gpxFileName" to "run-$now.gpx",
             "gpxContent" to gpx,
-            "distanceMeters" to routePoints.zipWithNext().sumOf { (a, b) -> distanceMeters(a, b) },
+            "distanceMeters" to dist,
             "pointCount" to points.size,
             "startedAt" to now,
             "recordedAt" to now
