@@ -63,7 +63,9 @@ private enum class RunPhase { PRE_RUN, RUNNING, PAUSED }
 private const val HERITAGE_UNLOCK_RADIUS_METERS = 40.0
 
 @Composable
-fun RunScreen() {
+fun RunScreen(
+    autoStartRequest: Int = 0
+) {
     val context        = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val mapView        = remember { MapView(context) }
@@ -85,10 +87,12 @@ fun RunScreen() {
     var notifHeritage       by remember { mutableStateOf<Heritage?>(null) }
     // 停止確認對話框（直接跑步模式使用）
     var showStopDialog      by remember { mutableStateOf(false) }
+    var consumedAutoStartRequest by remember { mutableIntStateOf(0) }
     val podcastPlayer = remember {
         DefaultPodcastPlayer(
             context = context,
-            onPlaybackStarted = { heritageId ->
+            onPlaybackStarted = {},
+            onPlaybackCompleted = { heritageId ->
                 val heritage = heritages.firstOrNull { it.id == heritageId }
                     ?: return@DefaultPodcastPlayer
                 if (!RestorationRepository.isRestored(heritageId)) {
@@ -113,6 +117,22 @@ fun RunScreen() {
     }
 
     rememberLocationPermission { locationGranted = true }
+
+    LaunchedEffect(autoStartRequest, locationGranted) {
+        if (
+            autoStartRequest > consumedAutoStartRequest &&
+            locationGranted &&
+            phase == RunPhase.PRE_RUN
+        ) {
+            consumedAutoStartRequest = autoStartRequest
+            elapsedSeconds = 0
+            unlockedDuringRun.clear()
+            podcastRequestedDuringRun.clear()
+            selectedRoutePoints = emptyList()
+            tracker.start()
+            phase = RunPhase.RUNNING
+        }
+    }
 
     DisposableEffect(lifecycleOwner) {
         val obs = object : DefaultLifecycleObserver {

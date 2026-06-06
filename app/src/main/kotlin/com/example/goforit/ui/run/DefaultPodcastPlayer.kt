@@ -12,6 +12,7 @@ import java.util.Locale
 class DefaultPodcastPlayer(
     context: Context,
     private val onPlaybackStarted: (Int) -> Unit,
+    private val onPlaybackCompleted: (Int) -> Unit,
     private val onPlaybackFailed: (Int) -> Unit
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -34,7 +35,9 @@ class DefaultPodcastPlayer(
                         }
 
                         override fun onDone(utteranceId: String) {
+                            val heritageId = utteranceId.toIntOrNull()
                             mainHandler.post {
+                                heritageId?.let(onPlaybackCompleted)
                                 activeHeritageId = null
                                 playNext()
                             }

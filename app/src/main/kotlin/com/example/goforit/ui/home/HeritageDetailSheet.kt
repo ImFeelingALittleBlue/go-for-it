@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,12 +23,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Business
+import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -67,7 +71,8 @@ private const val BUILD_COST = 100
 @Composable
 fun HeritageDetailSheet(
     heritage: Heritage,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onStartExplore: () -> Unit = onDismiss
 ) {
     val context = LocalContext.current
     val points by SilverSaltStore.points(context)
@@ -77,6 +82,14 @@ fun HeritageDetailSheet(
     val isBuilt = MapBuildRepository.records().any { it.heritageId == heritage.id }
     var showQuiz by remember(heritage.id) { mutableStateOf(false) }
     var quizMessage by remember(heritage.id) { mutableStateOf<String?>(null) }
+    var showOldPhoto by remember(heritage.id) { mutableStateOf(false) }
+    var locationGranted by remember { mutableStateOf(false) }
+    val hasLocationPermission = rememberLocationPermission { locationGranted = true }
+    val isNearHeritage by rememberIsNearHeritage(
+        heritage = heritage,
+        hasLocationPermission = hasLocationPermission || locationGranted
+    )
+    val needsMoreSilver = isRestored && !isBuilt && points < BUILD_COST
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -104,7 +117,20 @@ fun HeritageDetailSheet(
                         .weight(1f)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    if (isRestored) {
+                    if (!isRestored && isNearHeritage) {
+                        NearbyUnlockHero(
+                            heritage = heritage,
+                            onExplore = onStartExplore
+                        )
+                    } else if (needsMoreSilver && !showOldPhoto) {
+                        InsufficientSilverHero(
+                            points = points,
+                            onQuizClick = {
+                                quizMessage = null
+                                showQuiz = true
+                            }
+                        )
+                    } else if (isRestored) {
                         HeritagePhoto(heritage.photoFile)
                     } else {
                         CurrentStreetView(heritage)
@@ -133,7 +159,9 @@ fun HeritageDetailSheet(
 
                             if (isRestored) {
                                 Text(
-                                    "解鎖於 ${formatUnlockTime(restorationRecord?.restoredAt ?: 0L)}",
+                                    "解鎖於 ${formatUnlockTime(
+                                        restorationRecord?.restoredAt ?: 0L
+                                    )}",
                                     fontSize = 12.sp,
                                     color = OrangeAccent
                                 )
@@ -166,9 +194,10 @@ fun HeritageDetailSheet(
                                 }
                             },
                             onNeedSilver = {
-                                quizMessage = null
-                                showQuiz = true
-                            }
+                                showOldPhoto = !showOldPhoto
+                            },
+                            shortageMode = needsMoreSilver,
+                            showingOldPhoto = showOldPhoto
                         )
                     }
                 }
@@ -196,6 +225,203 @@ fun HeritageDetailSheet(
             },
             onDismiss = { showQuiz = false }
         )
+    }
+}
+
+@Composable
+private fun NearbyUnlockHero(
+    heritage: Heritage,
+    onExplore: () -> Unit
+) {
+    val context = LocalContext.current
+    val bitmap = remember(heritage.photoFile) {
+        runCatching {
+            context.assets.open("photos/${heritage.photoFile}")
+                .use(BitmapFactory::decodeStream)
+                .asImageBitmap()
+        }.getOrNull()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(280.dp)
+            .background(Color(0xFFB5ADA3)),
+        contentAlignment = Alignment.Center
+    ) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(14.dp)
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF6B625B).copy(alpha = 0.46f))
+        )
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = Color(0xFFF8F3EB)
+            ) {
+                Icon(
+                    Icons.Default.DirectionsRun,
+                    contentDescription = null,
+                    tint = Color(0xFF615951),
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "解鎖舊貌",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(8.dp))
+            Surface(
+                shape = RoundedCornerShape(9.dp),
+                color = Color(0xFF6E6863).copy(alpha = 0.78f)
+            ) {
+                Text(
+                    "✓ 已生成路線故事 Podcast\n｜尚未前往探索此古蹟",
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = onExplore,
+                shape = RoundedCornerShape(22.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFF8F3EB),
+                    contentColor = Color(0xFF8E5D3B)
+                )
+            ) {
+                Text("前往探索")
+            }
+        }
+    }
+}
+
+@Composable
+private fun InsufficientSilverHero(
+    points: Int,
+    onQuizClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(280.dp)
+            .background(Color(0xFF777777))
+    ) {
+        PerspectiveGrid(modifier = Modifier.fillMaxSize())
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(horizontal = 48.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Surface(
+                modifier = Modifier.height(68.dp),
+                shape = RoundedCornerShape(50),
+                color = Color(0xFFF8F3EB)
+            ) {
+                Box(
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Business,
+                        contentDescription = null,
+                        tint = Color(0xFF6A625B)
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "創建於我的地圖！",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(8.dp))
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                color = Color(0xFF8C8A86)
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    Text("創建所需時光銀鹽", color = Color.White, fontSize = 11.sp)
+                    Spacer(Modifier.height(5.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LinearProgressIndicator(
+                            progress = { (points / BUILD_COST.toFloat()).coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(6.dp),
+                            color = Color(0xFFF6E5B5),
+                            trackColor = Color(0xFFD4D0C9)
+                        )
+                        Spacer(Modifier.padding(horizontal = 4.dp))
+                        Text("$points / $BUILD_COST", color = Color.White, fontSize = 11.sp)
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = onQuizClick,
+                shape = RoundedCornerShape(22.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFF8F3EB),
+                    contentColor = Color(0xFF8E5D3B)
+                )
+            ) {
+                Text("以問答補足")
+            }
+        }
+    }
+}
+
+@Composable
+private fun PerspectiveGrid(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val horizon = size.height * 0.48f
+        val gridColor = Color.White.copy(alpha = 0.32f)
+
+        for (index in -7..7) {
+            val bottomX = size.width / 2f + index * size.width / 7f
+            drawLine(
+                color = gridColor,
+                start = androidx.compose.ui.geometry.Offset(size.width / 2f, horizon),
+                end = androidx.compose.ui.geometry.Offset(bottomX, size.height),
+                strokeWidth = 2f
+            )
+            drawLine(
+                color = gridColor,
+                start = androidx.compose.ui.geometry.Offset(size.width / 2f, horizon),
+                end = androidx.compose.ui.geometry.Offset(bottomX, 0f),
+                strokeWidth = 2f
+            )
+        }
+
+        listOf(0.06f, 0.15f, 0.27f, 0.39f, 0.61f, 0.73f, 0.85f, 0.94f).forEach {
+            drawLine(
+                color = gridColor,
+                start = androidx.compose.ui.geometry.Offset(0f, size.height * it),
+                end = androidx.compose.ui.geometry.Offset(size.width, size.height * it),
+                strokeWidth = 2f
+            )
+        }
     }
 }
 
@@ -363,7 +589,9 @@ private fun HeritageActionButton(
     isBuilt: Boolean,
     points: Int,
     onBuild: () -> Unit,
-    onNeedSilver: () -> Unit
+    onNeedSilver: () -> Unit,
+    shortageMode: Boolean,
+    showingOldPhoto: Boolean
 ) {
     when {
         !isRestored -> {
@@ -372,9 +600,12 @@ private fun HeritageActionButton(
                 enabled = false,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                colors = ButtonDefaults.buttonColors(disabledContainerColor = Color(0xFFC9C9C9))
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF9B6A3F),
+                    disabledContainerColor = Color(0xFFC9C9C9)
+                )
             ) {
-                Text("前往探索以解鎖舊照片", modifier = Modifier.padding(vertical = 4.dp))
+                Text("創建我的地圖", modifier = Modifier.padding(vertical = 4.dp))
             }
         }
         isBuilt -> {
@@ -388,6 +619,19 @@ private fun HeritageActionButton(
                 Icon(Icons.Default.Business, contentDescription = null)
                 Spacer(Modifier.padding(horizontal = 4.dp))
                 Text("已創建於我的地圖", modifier = Modifier.padding(vertical = 4.dp))
+            }
+        }
+        shortageMode -> {
+            Button(
+                onClick = onNeedSilver,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9B6A3F))
+            ) {
+                Text(
+                    if (showingOldPhoto) "返回創建地圖" else "查看舊照片",
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
             }
         }
         else -> {

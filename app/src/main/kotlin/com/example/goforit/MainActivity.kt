@@ -8,6 +8,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -57,6 +61,7 @@ class MainActivity : ComponentActivity() {
 private fun MainApp() {
     // NavController：整個 App 的導航管理員，記住現在在哪一頁
     val navController = rememberNavController()
+    var autoStartRunRequest by remember { mutableIntStateOf(0) }
 
     // Scaffold：Material3 的頁面框架，幫我們安排 bottomBar 的位置
     Scaffold(
@@ -69,8 +74,23 @@ private fun MainApp() {
             startDestination = Screen.Home.route,
             modifier         = Modifier.padding(innerPadding)
         ) {
-            composable(Screen.Home.route)    { HomeScreen() }
-            composable(Screen.Run.route)     { RunScreen() }
+            composable(Screen.Home.route) {
+                HomeScreen(
+                    onStartExplore = {
+                        autoStartRunRequest++
+                        navController.navigate(Screen.Run.route) {
+                            popUpTo(navController.graph.startDestinationId) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                )
+            }
+            composable(Screen.Run.route) {
+                RunScreen(autoStartRequest = autoStartRunRequest)
+            }
             composable(Screen.Records.route) { CollectionScreen() }
             composable(Screen.Account.route) { AccountScreen() }
         }

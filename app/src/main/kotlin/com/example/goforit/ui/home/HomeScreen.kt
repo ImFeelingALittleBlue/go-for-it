@@ -62,7 +62,9 @@ private const val BUILT_BUILDING_SIZE_METERS = 145.0
 enum class HeritageFilter { ALL, RESTORED, PENDING, BUILT }
 
 @Composable
-fun HomeScreen() {
+fun HomeScreen(
+    onStartExplore: () -> Unit = {}
+) {
     val context        = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val mapView        = remember { MapView(context) }
@@ -192,7 +194,14 @@ fun HomeScreen() {
 
     // ── 古蹟詳情卡：selected 有值才顯示 ──────────────────────────────────────
     selected?.let { heritage ->
-        HeritageDetailSheet(heritage = heritage, onDismiss = { selected = null })
+        HeritageDetailSheet(
+            heritage = heritage,
+            onDismiss = { selected = null },
+            onStartExplore = {
+                selected = null
+                onStartExplore()
+            }
+        )
     }
 }
 
