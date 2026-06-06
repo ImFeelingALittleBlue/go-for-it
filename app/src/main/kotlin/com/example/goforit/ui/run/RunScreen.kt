@@ -329,6 +329,8 @@ fun RunScreen() {
                     }
                     Button(
                         onClick = {
+                            showStopDialog = false        // 清掉可能殘留的路線跑步 dialog 狀態
+                            selectedRoutePoints = emptyList() // 確保直接開始不帶著舊路線
                             elapsedSeconds = 0
                             unlockedDuringRun.clear()
                             if (locationGranted) tracker.start()
@@ -381,7 +383,7 @@ fun RunScreen() {
             }
             if (phase == RunPhase.RUNNING) {
                 Button(
-                    onClick = { phase = RunPhase.PAUSED },
+                    onClick = { showStopDialog = false; phase = RunPhase.PAUSED },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = RoundedCornerShape(0.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)
@@ -394,7 +396,7 @@ fun RunScreen() {
     }
 
     // ── 停止確認對話框（選路線跑步專用，直接跑步改用 PAUSED 狀態）────────────
-    if (showStopDialog) {
+    if (showStopDialog && selectedRoutePoints.isNotEmpty()) {
         StopConfirmDialog(
             onConfirm = {
                 showStopDialog = false
