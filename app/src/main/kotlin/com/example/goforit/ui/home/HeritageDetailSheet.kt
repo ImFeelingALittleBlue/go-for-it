@@ -26,7 +26,6 @@ import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.CircularProgressIndicator
@@ -68,6 +67,8 @@ import kotlinx.coroutines.withContext
 
 private const val BUILD_COST = 100
 
+private enum class QuizState { ASKING, CORRECT, WRONG }
+
 @Composable
 fun HeritageDetailSheet(
     heritage: Heritage,
@@ -80,8 +81,7 @@ fun HeritageDetailSheet(
         .firstOrNull { it.heritageId == heritage.id }
     val isRestored = restorationRecord != null
     val isBuilt = MapBuildRepository.records().any { it.heritageId == heritage.id }
-    var showQuiz by remember(heritage.id) { mutableStateOf(false) }
-    var quizMessage by remember(heritage.id) { mutableStateOf<String?>(null) }
+    var quizState by remember(heritage.id) { mutableStateOf<QuizState?>(null) }
     var showOldPhoto by remember(heritage.id) { mutableStateOf(false) }
     var locationGranted by remember { mutableStateOf(false) }
     val hasLocationPermission = rememberLocationPermission { locationGranted = true }
@@ -117,7 +117,26 @@ fun HeritageDetailSheet(
                         .weight(1f)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    if (!isRestored && isNearHeritage) {
+                    if (quizState != null) {
+                        HeritageQuizHero(
+                            heritage = heritage,
+                            points = points,
+                            state = quizState ?: QuizState.ASKING,
+                            onAnswer = { isCorrect ->
+                                if (isCorrect) {
+                                    val reward = (BUILD_COST - points).coerceAtLeast(0) + 2
+                                    if (reward > 0) {
+                                        SilverSaltStore.add(context, reward)
+                                    }
+                                    quizState = QuizState.CORRECT
+                                } else {
+                                    quizState = QuizState.WRONG
+                                }
+                            },
+                            onRetry = { quizState = QuizState.ASKING },
+                            onCancel = { quizState = null }
+                        )
+                    } else if (!isRestored && isNearHeritage) {
                         NearbyUnlockHero(
                             heritage = heritage,
                             onExplore = onStartExplore
@@ -126,8 +145,7 @@ fun HeritageDetailSheet(
                         InsufficientSilverHero(
                             points = points,
                             onQuizClick = {
-                                quizMessage = null
-                                showQuiz = true
+                                quizState = QuizState.ASKING
                             }
                         )
                     } else if (isRestored) {
@@ -194,10 +212,16 @@ fun HeritageDetailSheet(
                                 }
                             },
                             onNeedSilver = {
-                                showOldPhoto = !showOldPhoto
+                                if (quizState != null) {
+                                    quizState = null
+                                    showOldPhoto = true
+                                } else {
+                                    showOldPhoto = !showOldPhoto
+                                }
                             },
-                            shortageMode = needsMoreSilver,
-                            showingOldPhoto = showOldPhoto
+                            shortageMode = needsMoreSilver || quizState != null,
+                            showingOldPhoto = showOldPhoto,
+                            quizActive = quizState != null
                         )
                     }
                 }
@@ -205,27 +229,6 @@ fun HeritageDetailSheet(
         }
     }
 
-    if (showQuiz) {
-        HeritageQuizDialog(
-            heritage = heritage,
-            message = quizMessage,
-            onAnswer = { isCorrect ->
-                if (isCorrect) {
-                    val missingPoints = (BUILD_COST - points).coerceAtLeast(0)
-                    if (missingPoints > 0) {
-                        SilverSaltStore.add(context, missingPoints)
-                    }
-                    if (SilverSaltStore.spend(context, BUILD_COST)) {
-                        MapBuildRepository.add(heritage)
-                    }
-                    showQuiz = false
-                } else {
-                    quizMessage = "答錯了，再想一下"
-                }
-            },
-            onDismiss = { showQuiz = false }
-        )
-    }
 }
 
 @Composable
@@ -591,7 +594,8 @@ private fun HeritageActionButton(
     onBuild: () -> Unit,
     onNeedSilver: () -> Unit,
     shortageMode: Boolean,
-    showingOldPhoto: Boolean
+    showingOldPhoto: Boolean,
+    quizActive: Boolean
 ) {
     when {
         !isRestored -> {
@@ -629,7 +633,7 @@ private fun HeritageActionButton(
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9B6A3F))
             ) {
                 Text(
-                    if (showingOldPhoto) "返回創建地圖" else "查看舊照片",
+                    if (showingOldPhoto && !quizActive) "返回創建地圖" else "查看舊照片",
                     modifier = Modifier.padding(vertical = 4.dp)
                 )
             }
@@ -653,15 +657,17 @@ private fun HeritageActionButton(
 }
 
 @Composable
-private fun HeritageQuizDialog(
+private fun HeritageQuizHero(
     heritage: Heritage,
-    message: String?,
+    points: Int,
+    state: QuizState,
     onAnswer: (Boolean) -> Unit,
-    onDismiss: () -> Unit
+    onRetry: () -> Unit,
+    onCancel: () -> Unit
 ) {
     val answer = heritage.year.ifBlank { heritage.name }
     val question = if (heritage.year.isNotBlank()) {
-        "這張「${heritage.name}」歷史照片標示的年代是？"
+        "這張歷史照片標示的年代是？"
     } else {
         "你剛剛解鎖的這處古蹟名稱是？"
     }
@@ -673,46 +679,186 @@ private fun HeritageQuizDialog(
         }
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("回答古蹟問題", fontWeight = FontWeight.Bold) },
-        text = {
-            Column {
-                Text(question)
-                Spacer(Modifier.height(12.dp))
-                choices.forEach { choice ->
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(280.dp)
+            .background(Color(0xFF777777))
+    ) {
+        PerspectiveGrid(modifier = Modifier.fillMaxSize())
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            SilverProgressCard(points = points)
+            Spacer(Modifier.height(10.dp))
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                color = Color(0xFF351A15).copy(alpha = 0.94f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "「${heritage.name}」$question",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(12.dp))
+
+                    when (state) {
+                        QuizState.ASKING -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                choices.take(2).forEach { choice ->
+                                    QuizChoiceButton(
+                                        text = choice,
+                                        modifier = Modifier.weight(1f),
+                                        onClick = { onAnswer(choice == answer) }
+                                    )
+                                }
+                            }
+                            choices.drop(2).forEach { choice ->
+                                Spacer(Modifier.height(8.dp))
+                                QuizChoiceButton(
+                                    text = choice,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onClick = { onAnswer(choice == answer) }
+                                )
+                            }
+                        }
+                        QuizState.CORRECT -> {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFF435C35)
+                            ) {
+                                Text(
+                                    "恭喜答對喔",
+                                    modifier = Modifier.padding(vertical = 11.dp),
+                                    color = Color.White,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        QuizState.WRONG -> {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFF6B2722)
+                            ) {
+                                Text(
+                                    "答錯囉",
+                                    modifier = Modifier.padding(vertical = 11.dp),
+                                    color = Color.White,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        when (state) {
+                            QuizState.ASKING -> "答對即可獲得時光銀鹽"
+                            QuizState.CORRECT -> "獲得時光銀鹽，已達創建門檻"
+                            QuizState.WRONG -> "沒有關係，再試一次"
+                        },
+                        color = Color(0xFFCDBFB8),
+                        fontSize = 10.sp
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (state != QuizState.CORRECT) {
                     Button(
-                        onClick = { onAnswer(choice == answer) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
+                        onClick = onCancel,
                         shape = RoundedCornerShape(20.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFE9DED2),
-                            contentColor = Color(0xFF3B2B21)
+                            containerColor = Color(0xFFF8F3EB),
+                            contentColor = Color(0xFF7A563D)
                         )
                     ) {
-                        Text(choice)
+                        Text("取消解答", fontSize = 12.sp)
                     }
                 }
-                message?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Text(it, color = Color(0xFFC24B3A), fontSize = 13.sp)
+                if (state == QuizState.WRONG) {
+                    Button(
+                        onClick = onRetry,
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFF8F3EB),
+                            contentColor = Color(0xFF7A563D)
+                        )
+                    ) {
+                        Text("再試一次", fontSize = 12.sp)
+                    }
                 }
             }
-        },
-        confirmButton = {},
-        dismissButton = {
-            Button(
-                onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                elevation = null
-            ) {
-                Text("取消", color = TextGray)
+        }
+    }
+}
+
+@Composable
+private fun SilverProgressCard(points: Int) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = Color(0xFF8B8985).copy(alpha = 0.9f)
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
+            Text("創建所需時光銀鹽", color = Color.White, fontSize = 10.sp)
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LinearProgressIndicator(
+                    progress = { (points / BUILD_COST.toFloat()).coerceIn(0f, 1f) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(5.dp),
+                    color = Color(0xFFF6E5B5),
+                    trackColor = Color(0xFFD0CDC7)
+                )
+                Spacer(Modifier.padding(horizontal = 4.dp))
+                Text("$points / $BUILD_COST", color = Color.White, fontSize = 10.sp)
             }
-        },
-        containerColor = Color(0xFFF8F3EB)
-    )
+        }
+    }
+}
+
+@Composable
+private fun QuizChoiceButton(
+    text: String,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(6.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color(0xFF5B2B25),
+            contentColor = Color.White
+        ),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            horizontal = 8.dp,
+            vertical = 8.dp
+        )
+    ) {
+        Text(text, fontSize = 11.sp)
+    }
 }
 
 private fun buildYearChoices(year: String): List<String> {
