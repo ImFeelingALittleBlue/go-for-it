@@ -62,21 +62,23 @@ fun RouteRunningTopPanel(liveSilver: Int, coveredKm: Float, elapsedSeconds: Int)
     RunSilverRow(liveSilver)
 }
 
-// ─── 底部面板（地圖下方）：Podcast 卡 + 最近古蹟 + 按鈕 ─────────────────────
 @Composable
 fun RouteRunningBottomPanel(
     routePoints: List<Point>,
     heritages: List<Heritage>,
     nearestHeritage: Heritage?,
     distanceToNearestM: Float,
-    unlockedIds: Set<Int>,     // 已解鎖古蹟 id（含跑步前已解鎖的）
-    onPause: () -> Unit,       // 暫停 → 彈出結束對話框
-    onStop: () -> Unit         // 結束跑步 → 同樣彈出確認對話框
+    unlockedIds: Set<Int>,
+    activePodcastHeritage: Heritage? = null,   // 目前正在播放 Podcast 的古蹟
+    activeLine: DialogueLine? = null,           // 目前正在唸的對話行
+    onPause: () -> Unit,
+    onStop: () -> Unit
 ) {
     // 計算路線停靠點（路線不變就不重算）
     val stops = remember(routePoints) { heritagesOnRoute(routePoints, heritages) }
     Column(modifier = Modifier.fillMaxWidth().background(Color.White)) {
-        AIPodcastCard(stops = stops, unlockedIds = unlockedIds)
+        AIPodcastCard(stops = stops, unlockedIds = unlockedIds,
+            activePodcastHeritage = activePodcastHeritage, activeLine = activeLine)
         nearestHeritage?.let { NearestHeritageSection(it, distanceToNearestM, unlockedIds) }
         // 暫停按鈕（按下後跳出結束旅程確認對話框）
         Button(
@@ -88,28 +90,44 @@ fun RouteRunningBottomPanel(
     }
 }
 
-// AI 旁白 Podcast 卡片：深褐色背景 + 播放圖示 + 標題 + 古蹟進度點列
 @Composable
-private fun AIPodcastCard(stops: List<Pair<Heritage, Int>>, unlockedIds: Set<Int>) {
+private fun AIPodcastCard(
+    stops: List<Pair<Heritage, Int>>,
+    unlockedIds: Set<Int>,
+    activePodcastHeritage: Heritage? = null,
+    activeLine: DialogueLine? = null
+) {
+    val isPlaying = activePodcastHeritage != null
     Surface(modifier = Modifier.fillMaxWidth(), color = Color(0xFF2C2218)) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // 播放鍵圓圈
+                // 播放鍵：播放中顯示橘色，靜止時顯示金色
                 Surface(modifier = Modifier.size(40.dp), shape = CircleShape,
                     color = Color(0xFF3D2E1C)) {
                     Box(contentAlignment = Alignment.Center,
                         modifier = Modifier.fillMaxSize()) {
-                        Text("▶", color = Color(0xFFD4A96A), fontSize = 14.sp)
+                        Text("▶", color = if (isPlaying) OrangeAccent else Color(0xFFD4A96A),
+                            fontSize = 14.sp)
                     }
                 }
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text("AI 旁白 Podcast", fontSize = 11.sp, color = Color(0xFF9E8E7A))
-                    Text("AI 導覽路線", fontSize = 15.sp,
-                        color = Color.White, fontWeight = FontWeight.Bold)
+                    // 播放中顯示古蹟名稱，靜止時顯示「AI 導覽路線」
+                    Text(
+                        if (isPlaying) activePodcastHeritage!!.name else "AI 導覽路線",
+                        fontSize = 15.sp, color = Color.White, fontWeight = FontWeight.Bold
+                    )
                     Text("含 ${stops.size} 個古蹟停靠點",
                         fontSize = 11.sp, color = Color(0xFF9E8E7A))
                 }
+            }
+            // 播放中：顯示說話者角色與當前對話文字
+            if (isPlaying && activeLine != null) {
+                Spacer(Modifier.height(8.dp))
+                val role = if (activeLine.speaker == PodcastSpeaker.HOST_B) "文史達人" else "主持人"
+                Text("$role・${activeLine.text.take(36)}…",
+                    fontSize = 11.sp, color = OrangeAccent, maxLines = 1)
             }
             Spacer(Modifier.height(12.dp))
             // 古蹟進度小點列（依路線順序排列；已解鎖=橘色，未解鎖=深褐色）
@@ -132,7 +150,6 @@ private fun AIPodcastCard(stops: List<Pair<Heritage, Int>>, unlockedIds: Set<Int
     }
 }
 
-// 最近的古蹟卡（白色背景）：名稱 + 解鎖狀態 + 年代 + 距離大字
 @Composable
 private fun NearestHeritageSection(heritage: Heritage, distanceM: Float, unlockedIds: Set<Int>) {
     val isUnlocked = heritage.id in unlockedIds
@@ -173,7 +190,6 @@ private fun NearestHeritageSection(heritage: Heritage, distanceM: Float, unlocke
     }
 }
 
-// Haversine 公式計算兩點直線距離（單位：公尺）
 private fun routePanelHaversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
     val R = 6_371_000.0
     val dLat = (lat2 - lat1) * PI / 180

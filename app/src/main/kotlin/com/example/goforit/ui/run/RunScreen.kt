@@ -100,8 +100,11 @@ fun RunScreen(
     val podcastRequestedDuringRun = remember { mutableStateListOf<Int>() }
     var selectedRoutePoints by remember { mutableStateOf<List<Point>>(emptyList()) }
     var selectedRouteGpx    by remember { mutableStateOf("") }   // 原始 GPX 字串，跑完存進紀錄
-    var notifHeritage       by remember { mutableStateOf<Heritage?>(null) }
-    var showStopDialog      by remember { mutableStateOf(false) }
+    var notifHeritage            by remember { mutableStateOf<Heritage?>(null) }
+    var showStopDialog           by remember { mutableStateOf(false) }
+    // 目前正在播放 Podcast 的古蹟與對話行（傳給 RouteRunningPanel 更新卡片 UI）
+    var activePodcastHeritage    by remember { mutableStateOf<Heritage?>(null) }
+    var activeLine               by remember { mutableStateOf<DialogueLine?>(null) }
     val restoredIds = RestorationRepository.records().map { it.heritageId }.toSet()
     val builtIds    = MapBuildRepository.records().map { it.heritageId }.toSet()
     val nearestHeritage     = remember(pointCount) {
@@ -135,8 +138,11 @@ fun RunScreen(
     val podcastPlayer = remember {
         DefaultPodcastPlayer(
             context = context,
-            onPlaybackStarted = {},
+            onPlaybackStarted = { heritageId ->
+                activePodcastHeritage = heritages.firstOrNull { it.id == heritageId }
+            },
             onPlaybackCompleted = { heritageId ->
+                activePodcastHeritage = null
                 val heritage = heritages.firstOrNull { it.id == heritageId }
                     ?: return@DefaultPodcastPlayer
                 if (!RestorationRepository.isRestored(heritageId)) {
@@ -148,8 +154,10 @@ fun RunScreen(
                 }
             },
             onPlaybackFailed = { heritageId ->
+                activePodcastHeritage = null
                 podcastRequestedDuringRun.remove(heritageId)
-            }
+            },
+            onLineChanged = { line -> activeLine = line }
         )
     }
     // 即時計算已跑距離（每新增一個 GPS 點就重算）
@@ -478,13 +486,15 @@ fun RunScreen(
         // ── 路線跑步底部面板（地圖下方：Podcast + 最近古蹟 + 按鈕）─────────
         if (selectedRoutePoints.isNotEmpty() && phase != RunPhase.PRE_RUN) {
             RouteRunningBottomPanel(
-                routePoints        = selectedRoutePoints,
-                heritages          = heritages,
-                nearestHeritage    = nearestHeritage,
-                distanceToNearestM = distanceToNearestM,
-                unlockedIds        = restoredIds + unlockedDuringRun.toSet(),
-                onPause            = { showStopDialog = true },
-                onStop             = { showStopDialog = true }
+                routePoints           = selectedRoutePoints,
+                heritages             = heritages,
+                nearestHeritage       = nearestHeritage,
+                distanceToNearestM    = distanceToNearestM,
+                unlockedIds           = restoredIds + unlockedDuringRun.toSet(),
+                activePodcastHeritage = activePodcastHeritage,
+                activeLine            = activeLine,
+                onPause               = { showStopDialog = true },
+                onStop                = { showStopDialog = true }
             )
         }
 
