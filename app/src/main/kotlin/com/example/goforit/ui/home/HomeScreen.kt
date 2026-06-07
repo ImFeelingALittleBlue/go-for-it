@@ -46,6 +46,7 @@ import com.mapbox.maps.plugin.annotation.generated.CircleAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.CircleAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.OnCircleAnnotationClickListener
 import com.mapbox.maps.plugin.annotation.generated.createCircleAnnotationManager
+import com.mapbox.maps.plugin.gestures.gestures
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.model.AutocompletePrediction
 import com.google.android.libraries.places.api.model.AutocompleteSessionToken
@@ -244,6 +245,14 @@ fun HomeScreen(
             AndroidView(
                 factory = {
                     mapView.apply {
+                        gestures.updateSettings {
+                            pinchToZoomEnabled = true
+                            pinchScrollEnabled = true
+                            scrollEnabled = true
+                            doubleTapToZoomInEnabled = true
+                            doubleTouchToZoomOutEnabled = true
+                            quickZoomEnabled = true
+                        }
                         mapboxMap.loadStyleUri(Style.MAPBOX_STREETS) {
                             applyWarmMapStyle(it)
                             mapboxMap.setCamera(
