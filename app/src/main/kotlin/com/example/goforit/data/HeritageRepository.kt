@@ -43,7 +43,8 @@ object HeritageRepository {
                 )
             }
         }
-        return result
+        // 同一地點可能有多張老照片（同名多筆），只保留第一筆，避免地圖重複標記
+        return result.distinctBy { it.name }
     }
 
     // 把一行 CSV 拆成欄位
