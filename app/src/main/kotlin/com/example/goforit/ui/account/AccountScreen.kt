@@ -31,7 +31,7 @@ fun AccountScreen() {
     val email       = user?.email ?: ""
 
     // 從現有 Repository 讀取統計數字
-    val runCount      = RouteRepository.records().size
+    val runCount      = RouteRepository.records().count { it.elapsedSeconds > 0 }
     val unlockedCount = RestorationRepository.records().size
     val builtCount    = MapBuildRepository.records().size
 
