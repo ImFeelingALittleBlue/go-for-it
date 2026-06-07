@@ -82,7 +82,10 @@ fun RecordDetailScreen(
         // 頂部列
         Box(modifier = Modifier.fillMaxWidth().background(Color.White)
             .padding(horizontal = 8.dp, vertical = 12.dp)) {
-            TextButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
+            TextButton(
+                onClick = { mapView.onStop(); onBack() },
+                modifier = Modifier.align(Alignment.CenterStart)
+            ) {
                 Text("← 返回", color = Color(0xFF1A1A1A), fontSize = 14.sp)
             }
             Column(modifier = Modifier.align(Alignment.Center),
@@ -148,7 +151,13 @@ fun RecordDetailScreen(
             .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(
-                onClick = { if (routePoints.isNotEmpty()) onRunAgain(routePoints, record.gpxContent, (record.distanceMeters / 1000).toFloat()) },
+                onClick = {
+                    if (routePoints.isNotEmpty()) {
+                        // 先停止 MapView 渲染，再離開，避免 RenderThread 崩潰
+                        mapView.onStop()
+                        onRunAgain(routePoints, record.gpxContent, (record.distanceMeters / 1000).toFloat())
+                    }
+                },
                 enabled = routePoints.isNotEmpty(),
                 modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(24.dp)
             ) { Text("再跑一次", fontSize = 14.sp) }
