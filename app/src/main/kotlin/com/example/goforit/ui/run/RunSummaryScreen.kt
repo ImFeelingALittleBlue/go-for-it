@@ -53,8 +53,9 @@ fun RunSummaryScreen(
     val context        = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val mapView        = remember { MapView(context) }
-    var showShareSheet by remember { mutableStateOf(false) }
-    var snapBitmap     by remember { mutableStateOf<Bitmap?>(null) }
+    var showShareSheet  by remember { mutableStateOf(false) }
+    var snapBitmap      by remember { mutableStateOf<Bitmap?>(null) }
+    var generatingShare by remember { mutableStateOf(false) }
 
     // 地區用於副標題（日期 · 地區）
     val region = remember(trackPoints, routePoints) {
@@ -209,14 +210,20 @@ fun RunSummaryScreen(
             }
             Button(
                 onClick = {
-                    snapBitmap = createRouteShareBitmap(routePoints.ifEmpty { trackPoints })
-                    showShareSheet = true
+                    generatingShare = true
+                    // 截取 MapView 目前畫面（地圖底圖 + 路線折線已一起渲染）
+                    captureMapSnapshot(mapView) { bmp ->
+                        snapBitmap = bmp
+                        generatingShare = false
+                        showShareSheet = true
+                    }
                 },
+                enabled = !generatingShare,
                 modifier = Modifier.weight(1f).height(48.dp),
                 shape = RoundedCornerShape(24.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)
             ) {
-                Text("分享", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text(if (generatingShare) "生成中..." else "分享", color = Color.White, fontWeight = FontWeight.SemiBold)
             }
         }
     }

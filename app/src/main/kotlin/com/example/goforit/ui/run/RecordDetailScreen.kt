@@ -48,8 +48,9 @@ fun RecordDetailScreen(
     val mapView        = remember { MapView(context) }
     var routePoints    by remember { mutableStateOf<List<Point>>(emptyList()) }
     var routeDrawn     by remember { mutableStateOf(false) }
-    var showShareSheet by remember { mutableStateOf(false) }
-    var snapBitmap     by remember { mutableStateOf<Bitmap?>(null) }
+    var showShareSheet   by remember { mutableStateOf(false) }
+    var snapBitmap       by remember { mutableStateOf<Bitmap?>(null) }
+    var generatingShare  by remember { mutableStateOf(false) }
 
     // 背景解析 GPX 取得路線座標
     LaunchedEffect(record.gpxContent) {
@@ -152,10 +153,19 @@ fun RecordDetailScreen(
                 modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(24.dp)
             ) { Text("再跑一次", fontSize = 14.sp) }
             Button(
-                onClick = { snapBitmap = createRouteShareBitmap(routePoints); showShareSheet = true },
+                onClick = {
+                    generatingShare = true
+                    // 截取 MapView 目前畫面（地圖底圖 + 路線折線已一起渲染）
+                    captureMapSnapshot(mapView) { bmp ->
+                        snapBitmap = bmp
+                        generatingShare = false
+                        showShareSheet = true
+                    }
+                },
+                enabled = !generatingShare,
                 modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(24.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)
-            ) { Text("分享", color = Color.White, fontWeight = FontWeight.SemiBold) }
+            ) { Text(if (generatingShare) "生成中..." else "分享", color = Color.White, fontWeight = FontWeight.SemiBold) }
         }
     }
     if (showShareSheet) {
