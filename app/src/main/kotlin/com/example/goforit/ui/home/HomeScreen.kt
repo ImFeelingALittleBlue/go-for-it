@@ -31,6 +31,7 @@ import com.example.goforit.data.Heritage
 import com.example.goforit.data.HeritageRepository
 import com.example.goforit.data.MapBuildRepository
 import com.example.goforit.data.RestorationRepository
+import com.example.goforit.data.SilverSaltStore
 import com.example.goforit.ui.applyWarmMapStyle
 import com.mapbox.geojson.Feature
 import com.mapbox.geojson.FeatureCollection
@@ -239,6 +240,9 @@ fun HomeScreen(
                 )
             }
         }
+
+        // ── 時光銀鹽累計橫條 ────────────────────────────────────────────────
+        SilverSaltBanner()
 
         // ── 地圖（占畫面 55%）───────────────────────────────────────────────
         Box(modifier = Modifier.weight(0.55f)) {
@@ -689,5 +693,51 @@ fun MapPill(text: String) {
             fontSize = 12.sp,
             color = Color(0xFF1A1A1A)
         )
+    }
+}
+
+// 搜尋列下方：時光銀鹽累計橫條
+@Composable
+private fun SilverSaltBanner() {
+    val context = LocalContext.current
+    val silver by SilverSaltStore.points(context)
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = Color.White,
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 左側銀鹽圖示圓圈
+            Surface(
+                modifier = Modifier.size(36.dp),
+                shape = RoundedCornerShape(50),
+                color = Color(0xFF5C3D1E)
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Text("銀", color = Color(0xFFD4A96A), fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            // 中間文字
+            Column(modifier = Modifier.weight(1f)) {
+                Text("時光銀鹽", fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                    color = Color(0xFF2C2218))
+                Text("依步數及速度累計", fontSize = 11.sp, color = TextGray)
+            }
+            // 右側累計數字
+            Text(
+                text = "$silver",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = OrangeAccent
+            )
+        }
     }
 }
