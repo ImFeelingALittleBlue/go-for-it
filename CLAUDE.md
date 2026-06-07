@@ -64,9 +64,11 @@ Figma 設計稿：https://www.figma.com/design/DvrclsHl9R2hLEpDAoHhdk/Untitled?n
 - [x] **選擇路線跑步中 UI**（`RouteRunningPanel.kt`）：時光銀鹽頂部列 + 地圖 + AI Podcast 卡（進度點依路線古蹟排列）+ 最近古蹟 + 暫停按鈕
 - [x] **直接跑步中 UI**：暫停按下跳出「要結束旅程嗎？」對話框（繼續跑步 / 結束跑步）
 - [x] **跑步結算頁**：自動判斷地區命名（台南中西區探索）+ 右側鉛筆改名 + 日期/地區副標
-- [x] **紀錄頁面**（`CollectionScreen.kt`）：跑完自動儲存 + 愛心收藏 + 刪除按鈕
+- [x] **紀錄頁面**（`CollectionScreen.kt`）：月份分組卡片 + 愛心收藏 + 點擊查看詳情
 - [x] **已儲存路線**（`SavedRoutesScreen.kt`）：只顯示按愛心的紀錄，點擊直接載入原始 GPX 重跑
 - [x] GPX 原始內容隨紀錄存進 Firestore，按愛心後不需重新上傳即可再次選路線跑步
+- [x] **紀錄詳情頁**（`RecordDetailScreen.kt`）：地圖折線 + 統計 + 再跑一次（PendingRunStore）+ 分享
+- [x] **分享底頁**（`ShareSheet.kt`）：Mapbox Snapshotter 截圖（含真實地圖底圖）+ 儲存圖片 + AI Podcast 佔位
 - [ ] Room DB：從 metadata.csv 匯入古蹟資料
 - [ ] 古蹟觸發：進入 40m 範圍自動播放語音
 - [ ] AI 語音導覽：Firebase Functions + Claude API 生成旁白
@@ -94,6 +96,10 @@ app/src/main/kotlin/com/example/goforit/
     │   ├── RunningOverlay.kt          ← 跑步中共用元件（統計列、解鎖通知、對話框）
     │   ├── RouteRunningPanel.kt       ← 選擇路線跑步中的頂部/底部面板
     │   ├── RunSummaryScreen.kt        ← 跑步結算頁（地圖 + 統計 + 命名 + 分享）
+    │   ├── RecordDetailScreen.kt      ← 紀錄詳情頁（從紀錄頁點入，含地圖+統計+再跑一次）
+    │   ├── ShareSheet.kt              ← 分享底頁（Mapbox Snapshotter 截圖 + Podcast 佔位）
+    │   ├── MapSnapshot.kt             ← Mapbox Snapshotter 工具（生成含底圖的路線圖片）
+    │   ├── ShareUtils.kt              ← 分享工具（Canvas 路線圖、存相簿、存 GPX）
     │   ├── SavedRoutesScreen.kt       ← 已儲存路線（愛心收藏清單 + GPX 上傳）
     │   ├── GpxParser.kt               ← GPX 解析（XmlPullParser + Haversine）
     │   └── RoutePreviewScreen.kt      ← 路線預覽 + 開始跑步
