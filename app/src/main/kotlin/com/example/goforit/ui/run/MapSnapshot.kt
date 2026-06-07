@@ -1,18 +1,22 @@
 package com.example.goforit.ui.run
 
+import android.app.Activity
 import android.graphics.Bitmap
-import com.mapbox.maps.MapboxExperimental
 import com.mapbox.maps.MapView
 
-// 截取 MapView 當前畫面（含底圖與已繪製的路線折線），用於分享圖片
-// Mapbox snapshot API 在主執行緒回呼 onResult，可直接更新 Compose state
-// 若截圖失敗（地圖尚未載入完成），退回純路線圖
-@OptIn(MapboxExperimental::class)
+// MapView の現在の画面（底图＋路線折線）を Bitmap としてキャプチャする
+// 内部では ShareUtils.kt の captureMapView（PixelCopy 方式）を使用
+// PixelCopy は Android 8 以降対応で、OpenGL レンダリングの MapView にも有効
+// 失敗した場合（古い端末・View 未 layout）は純路線图にフォールバック
 fun captureMapSnapshot(
     mapView: MapView,
     onResult: (Bitmap) -> Unit
 ) {
-    mapView.mapboxMap.snapshot { bitmap ->
+    val activity = mapView.context as? Activity ?: run {
+        onResult(createRouteShareBitmap(emptyList()))
+        return
+    }
+    captureMapView(activity, mapView) { bitmap ->
         onResult(bitmap ?: createRouteShareBitmap(emptyList()))
     }
 }
