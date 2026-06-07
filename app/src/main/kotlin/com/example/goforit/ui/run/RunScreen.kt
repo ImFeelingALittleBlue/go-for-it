@@ -20,6 +20,7 @@ import androidx.lifecycle.LifecycleOwner
 import com.example.goforit.data.Heritage
 import com.example.goforit.data.HeritageRepository
 import com.example.goforit.data.PendingRunStore
+import com.example.goforit.data.MapBuildRepository
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.RouteRepository
 import android.content.Context
@@ -101,7 +102,8 @@ fun RunScreen(
     var selectedRouteGpx    by remember { mutableStateOf("") }   // 原始 GPX 字串，跑完存進紀錄
     var notifHeritage       by remember { mutableStateOf<Heritage?>(null) }
     var showStopDialog      by remember { mutableStateOf(false) }
-    val restoredIds         = RestorationRepository.records().map { it.heritageId }.toSet()
+    val restoredIds = RestorationRepository.records().map { it.heritageId }.toSet()
+    val builtIds    = MapBuildRepository.records().map { it.heritageId }.toSet()
     val nearestHeritage     = remember(pointCount) {
         val from = tracker.points.lastOrNull() ?: Point.fromLngLat(120.2028, 23.0000)
         heritages.minByOrNull { h -> distanceMeters(from.latitude(), from.longitude(), h.lat, h.lng) }
@@ -385,8 +387,14 @@ fun RunScreen(
                                 heritages.map { h ->
                                     CircleAnnotationOptions()
                                         .withPoint(Point.fromLngLat(h.lng, h.lat))
-                                        .withCircleRadius(7.0).withCircleColor("#B5651D")
-                                        .withCircleStrokeWidth(1.5).withCircleStrokeColor("#FFFFFF")
+                                        .withCircleRadius(7.0)
+                                        .withCircleColor(when {
+                                            h.id in builtIds    -> "#4CAF50"  // 已修復：綠色
+                                            h.id in restoredIds -> "#D4822A"  // 已解鎖未修復：橘色
+                                            else                -> "#888888"  // 未解鎖：灰色
+                                        })
+                                        .withCircleStrokeWidth(1.5)
+                                        .withCircleStrokeColor("#FFFFFF")
                                 }
                             )
                             // routeLineManager 先建（在下層）→ polylineManager 在上層蓋 GPS 軌跡

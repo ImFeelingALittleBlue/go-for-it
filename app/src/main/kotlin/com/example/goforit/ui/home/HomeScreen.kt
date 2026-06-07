@@ -367,13 +367,13 @@ private fun setHeritageMarkers(
             .withCircleRadius(if (h.id in builtIds) 4.0 else 8.0)
             .withCircleColor(
                 when {
-                    h.id in builtIds -> "#F7D47A"
-                    h.id in restoredIds -> "#4CAF50"
-                    else -> "#D4822A"
+                    h.id in builtIds    -> "#4CAF50"  // 已修復：綠色
+                    h.id in restoredIds -> "#D4822A"  // 已解鎖未修復：橘色
+                    else                -> "#888888"  // 未解鎖：灰色
                 }
             )
             .withCircleStrokeWidth(if (h.id in builtIds) 1.5 else 2.0)
-            .withCircleStrokeColor(if (h.id in builtIds) "#C46A2D" else "#FFFFFF")
+            .withCircleStrokeColor("#FFFFFF")
     }
 
     val created = manager.create(options)
