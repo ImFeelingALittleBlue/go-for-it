@@ -28,7 +28,6 @@ import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.CircularProgressIndicator
@@ -244,20 +243,6 @@ fun HeritageDetailSheet(
                             lineHeight = 22.sp
                         )
                         Spacer(Modifier.height(24.dp))
-
-                        // ── 測試用：直接標記已修復（上線前移除）──────────────────
-                        if (!isRestored) {
-                            TextButton(
-                                onClick = { RestorationRepository.add(heritage) },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    "🔧 測試：直接標記已修復",
-                                    fontSize = 12.sp,
-                                    color = TextGray
-                                )
-                            }
-                        }
 
                         HeritageActionButton(
                             isRestored = isRestored,
