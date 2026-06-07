@@ -68,18 +68,14 @@ private sealed class RunNav {
 // 跑步的兩個階段
 private enum class RunPhase { PRE_RUN, RUNNING, PAUSED }
 private const val HERITAGE_UNLOCK_RADIUS_METERS = 40.0
-private const val HERITAGE_SILVER_PER_SITE = 100  // 解鎖一個古蹟獲得 100 時光銀鹽
-
 // 計算本次跑步獲得的時光銀鹽
-// 公式：Steps × 0.013 × (0.5 + Speed/10)，Speed > 20km/hr 則歸零
-// heritageCount：本次解鎖的古蹟數，每個固定加 100
-fun calculateSilverReward(steps: Int, coveredKm: Float, elapsedSeconds: Int, heritageCount: Int): Int {
+// 公式：Steps × 0.013 × (0.5 + Speed/10)，Speed > 20km/hr（作弊/搭車）則歸零
+fun calculateSilverReward(steps: Int, coveredKm: Float, elapsedSeconds: Int): Int {
     val avgSpeedKmh = if (elapsedSeconds > 0)
         (coveredKm / (elapsedSeconds / 3600.0)) else 0.0
-    val runReward = if (avgSpeedKmh <= 20.0)
+    return if (avgSpeedKmh <= 20.0)
         (steps * 0.013 * (0.5 + avgSpeedKmh / 10.0)).toInt()
     else 0
-    return runReward + heritageCount * HERITAGE_SILVER_PER_SITE
 }
 
 @Composable
@@ -361,7 +357,7 @@ fun RunScreen(
                                 // 計算步數：感測器有值用感測器，否則從距離估算（1km ≈ 1333步）
                                 val steps = if (stepCountAtStart >= 0) stepCountNow - stepCountAtStart
                                             else (coveredKm * 1333).toInt()
-                                val silver = calculateSilverReward(steps, coveredKm, elapsedSeconds, unlockedDuringRun.size)
+                                val silver = calculateSilverReward(steps, coveredKm, elapsedSeconds)
                                 val summary = RunNav.Summary(
                                     trackPoints       = pts,
                                     routePoints       = emptyList(),
@@ -541,7 +537,7 @@ fun RunScreen(
                 // 計算步數：感測器有值用感測器，否則從距離估算（1km ≈ 1333步）
                 val steps = if (stepCountAtStart >= 0) stepCountNow - stepCountAtStart
                             else (coveredKm * 1333).toInt()
-                val silver = calculateSilverReward(steps, coveredKm, elapsedSeconds, unlockedDuringRun.size)
+                val silver = calculateSilverReward(steps, coveredKm, elapsedSeconds)
                 val summary = RunNav.Summary(
                     trackPoints       = tracker.points.toList(),
                     routePoints       = selectedRoutePoints.toList(),
