@@ -10,5 +10,8 @@ data class RouteRecord(
     val pointCount: Int = 0,
     val startedAt: Long = 0L,
     val recordedAt: Long = 0L,
-    val liked: Boolean = false   // 使用者在紀錄頁按愛心 → 出現在已儲存路線
+    val liked: Boolean = false,   // 使用者在紀錄頁按愛心 → 出現在已儲存路線
+    val elapsedSeconds: Int = 0,  // 跑步用時（秒）
+    val silverEarned: Int = 0,    // 本次獲得時光銀鹽
+    val unlockedCount: Int = 0    // 本次解鎖古蹟數
 )

@@ -19,6 +19,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.example.goforit.data.Heritage
 import com.example.goforit.data.HeritageRepository
+import com.example.goforit.data.PendingRunStore
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.RouteRepository
 import com.example.goforit.ui.applyWarmMapStyle
@@ -127,6 +128,7 @@ fun RunScreen(
 
     rememberLocationPermission { locationGranted = true }
 
+    // 首頁「立即探索」按鈕 → 自動開始直接跑步
     LaunchedEffect(autoStartRequest, locationGranted) {
         if (
             autoStartRequest > consumedAutoStartRequest &&
@@ -140,6 +142,18 @@ fun RunScreen(
             selectedRoutePoints = emptyList()
             tracker.start()
             phase = RunPhase.RUNNING
+        }
+    }
+
+    // 偵測「再跑一次」請求：CollectionScreen 設置 PendingRunStore 後切換到此 tab
+    val hasPendingRun by PendingRunStore.hasPending
+    LaunchedEffect(hasPendingRun) {
+        if (hasPendingRun) {
+            val pts  = PendingRunStore.points
+            val gpx  = PendingRunStore.gpxContent
+            val dist = PendingRunStore.distanceKm
+            PendingRunStore.clear()
+            if (pts.isNotEmpty()) nav = RunNav.RoutePreview(pts, dist, gpx)
         }
     }
 
@@ -303,7 +317,10 @@ fun RunScreen(
                                     silverEarned      = unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD,
                                     routeName         = runName
                                 )
-                                RouteRepository.addRun(runName, pts)
+                                RouteRepository.addRun(runName, pts, "",
+                                    elapsedSeconds,
+                                    unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD,
+                                    unlockedDuringRun.size)
                                 tracker.stop()
                                 podcastPlayer.stop()
                                 notifHeritage = null
@@ -479,7 +496,10 @@ fun RunScreen(
                     silverEarned      = unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD,
                     routeName         = runName
                 )
-                RouteRepository.addRun(runName, tracker.points.toList(), selectedRouteGpx)
+                RouteRepository.addRun(runName, tracker.points.toList(), selectedRouteGpx,
+                    elapsedSeconds,
+                    unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD,
+                    unlockedDuringRun.size)
                 tracker.stop()
                 podcastPlayer.stop()
                 selectedRoutePoints = emptyList()

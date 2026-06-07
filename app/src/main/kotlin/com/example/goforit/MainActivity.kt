@@ -88,25 +88,25 @@ private fun MainApp() {
                 startDestination = Screen.Home.route,
                 modifier         = Modifier.padding(innerPadding)
             ) {
-            composable(Screen.Home.route) {
-                HomeScreen(
-                    onStartExplore = {
-                        autoStartRunRequest++
-                        navController.navigate(Screen.Run.route) {
-                            popUpTo(navController.graph.startDestinationId) {
-                                saveState = true
+                composable(Screen.Home.route) {
+                    HomeScreen(
+                        onStartExplore = {
+                            autoStartRunRequest++
+                            navController.navigate(Screen.Run.route) {
+                                popUpTo(navController.graph.startDestinationId) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
                             }
-                            launchSingleTop = true
-                            restoreState = true
                         }
-                    }
-                )
-            }
-            composable(Screen.Run.route) {
-                RunScreen(autoStartRequest = autoStartRunRequest)
-            }
-            composable(Screen.Records.route) { CollectionScreen() }
-            composable(Screen.Account.route) { AccountScreen() }
+                    )
+                }
+                composable(Screen.Run.route) {
+                    RunScreen(autoStartRequest = autoStartRunRequest)
+                }
+                composable(Screen.Records.route) { CollectionScreen(navController) }
+                composable(Screen.Account.route) { AccountScreen() }
             }
         }
 

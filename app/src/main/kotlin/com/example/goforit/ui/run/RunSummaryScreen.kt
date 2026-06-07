@@ -1,5 +1,6 @@
 package com.example.goforit.ui.run
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -28,6 +29,7 @@ import com.example.goforit.ui.applyWarmMapStyle
 import com.example.goforit.ui.home.OrangeAccent
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
+import com.mapbox.maps.MapInitOptions
 import com.mapbox.maps.MapView
 import com.mapbox.maps.Style
 import com.mapbox.maps.plugin.annotation.annotations
@@ -51,8 +53,11 @@ fun RunSummaryScreen(
 ) {
     val context        = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val mapView        = remember { MapView(context) }
-    var showShareSheet by remember { mutableStateOf(false) }
+    // textureView=true：讓地圖渲染進 Window 圖層，PixelCopy 才截得到底圖與路線
+    val mapView        = remember { MapView(context, MapInitOptions(context = context, textureView = true)) }
+    var showShareSheet  by remember { mutableStateOf(false) }
+    var snapBitmap      by remember { mutableStateOf<Bitmap?>(null) }
+    var generatingShare by remember { mutableStateOf(false) }
 
     // 地區用於副標題（日期 · 地區）
     val region = remember(trackPoints, routePoints) {
@@ -205,11 +210,22 @@ fun RunSummaryScreen(
                 shape = RoundedCornerShape(24.dp)) {
                 Text("再跑一次", fontSize = 14.sp)
             }
-            Button(onClick = { showShareSheet = true },
+            Button(
+                onClick = {
+                    generatingShare = true
+                    // 截取 MapView 目前畫面（地圖底圖 + 路線折線已一起渲染）
+                    captureMapSnapshot(mapView) { bmp ->
+                        snapBitmap = bmp
+                        generatingShare = false
+                        showShareSheet = true
+                    }
+                },
+                enabled = !generatingShare,
                 modifier = Modifier.weight(1f).height(48.dp),
                 shape = RoundedCornerShape(24.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)) {
-                Text("分享", color = Color.White, fontWeight = FontWeight.SemiBold)
+                colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)
+            ) {
+                Text(if (generatingShare) "生成中..." else "分享", color = Color.White, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -239,94 +255,14 @@ fun RunSummaryScreen(
         )
     }
 
-    // ── 分享底頁：預覽成就圖片 + 儲存/下載 ────────────────────────────
+    // ── 分享底頁（地圖截圖 + Podcast 區塊）────────────────────────────
     if (showShareSheet) {
-        ModalBottomSheet(onDismissRequest = { showShareSheet = false }) {
-            ShareExportSheet(
-                coveredKm        = coveredKm,
-                elapsedSeconds   = elapsedSeconds,
-                unlockedHeritages = unlockedHeritages,
-                silverEarned     = silverEarned,
-                trackPoints      = trackPoints,
-                onDismiss        = { showShareSheet = false }
+        snapBitmap?.let { bmp ->
+            ShareBottomSheet(
+                routeName = routeName,
+                mapBitmap = bmp,
+                onDismiss = { showShareSheet = false }
             )
-        }
-    }
-}
-
-// 分享底頁：預覽成就圖片 + 儲存圖片 / 下載 GPX 兩個動作
-@Composable
-private fun ShareExportSheet(
-    coveredKm: Float,
-    elapsedSeconds: Int,
-    unlockedHeritages: List<Heritage>,
-    silverEarned: Int,
-    trackPoints: List<Point>,
-    onDismiss: () -> Unit
-) {
-    val context = LocalContext.current
-    // 預先產生成就圖片（只算一次）
-    val bitmap = remember {
-        createShareBitmap(
-            coveredKm      = coveredKm,
-            timeStr        = formatOverlayTime(elapsedSeconds),
-            heritageCount  = unlockedHeritages.size,
-            silverEarned   = silverEarned
-        )
-    }
-    var imgMsg by remember { mutableStateOf<String?>(null) }
-    var gpxMsg by remember { mutableStateOf<String?>(null) }
-
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("分享此次探索", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-        Spacer(Modifier.height(16.dp))
-
-        // 成就圖片預覽
-        Image(
-            bitmap = bitmap.asImageBitmap(),
-            contentDescription = "成就圖片",
-            contentScale = ContentScale.FillWidth,
-            modifier = Modifier.fillMaxWidth().aspectRatio(900f / 480f)
-                .clip(RoundedCornerShape(12.dp))
-        )
-
-        Spacer(Modifier.height(20.dp))
-
-        // 儲存圖片
-        imgMsg?.let { Text(it, fontSize = 12.sp, color = Color(0xFF4CAF50)) }
-        Button(
-            onClick = {
-                imgMsg = if (saveBitmapToGallery(context, bitmap)) "✓ 已儲存至相簿"
-                         else "儲存失敗，請再試"
-            },
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(24.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5C3D1E))
-        ) {
-            Text("儲存圖片", color = Color.White, fontWeight = FontWeight.SemiBold)
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        // 下載 GPX
-        gpxMsg?.let { Text(it, fontSize = 12.sp, color = Color(0xFF4CAF50)) }
-        OutlinedButton(
-            onClick = {
-                gpxMsg = if (saveGpxToDownloads(context, trackPoints)) "✓ GPX 已存至下載資料夾"
-                          else "下載失敗，請再試"
-            },
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(24.dp)
-        ) {
-            Text("下載 GPX 軌跡", fontSize = 14.sp)
-        }
-
-        Spacer(Modifier.height(12.dp))
-        TextButton(onClick = onDismiss) {
-            Text("關閉", color = Color(0xFF888888))
         }
     }
 }
