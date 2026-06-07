@@ -12,6 +12,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.goforit.data.Heritage
+import com.example.goforit.ui.home.OrangeAccent
 import com.example.goforit.ui.home.TextGray
 
 // 跑步中底部深色統計列：左距離、中計時、右停止按鈕
@@ -111,6 +112,23 @@ fun StopConfirmDialog(
         containerColor = Color.White,
         shape = RoundedCornerShape(16.dp)
     )
+}
+
+// 跑步中本次預計銀鹽列（顯示在距離/時間下方）
+@Composable
+fun RunSilverRow(liveSilver: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFF5F0EB))
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("本次預計銀鹽", fontSize = 12.sp, color = TextGray,
+            modifier = Modifier.weight(1f))
+        Text("+$liveSilver", fontSize = 20.sp,
+            fontWeight = FontWeight.Bold, color = OrangeAccent)
+    }
 }
 
 // 直接跑步的統計列（只有距離+時間，沒有按鈕）

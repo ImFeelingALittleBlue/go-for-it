@@ -27,7 +27,6 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import com.example.goforit.data.SilverSaltStore
 import com.example.goforit.ui.applyWarmMapStyle
 import com.example.goforit.ui.home.OrangeAccent
 import com.example.goforit.ui.home.TextGray
@@ -102,7 +101,6 @@ fun RunScreen(
     var selectedRouteGpx    by remember { mutableStateOf("") }   // 原始 GPX 字串，跑完存進紀錄
     var notifHeritage       by remember { mutableStateOf<Heritage?>(null) }
     var showStopDialog      by remember { mutableStateOf(false) }
-    val silverPoints        by SilverSaltStore.points(context)
     val restoredIds         = RestorationRepository.records().map { it.heritageId }.toSet()
     val nearestHeritage     = remember(pointCount) {
         val from = tracker.points.lastOrNull() ?: Point.fromLngLat(120.2028, 23.0000)
@@ -159,6 +157,11 @@ fun RunScreen(
             (distanceMeters(a.latitude(), a.longitude(), b.latitude(), b.longitude()) / 1000.0).toFloat()
         }.sum()
     }
+
+    // 即時估算本次跑步銀鹽（每秒/每步更新，結束時才是真正結算值）
+    val liveSteps = if (stepCountAtStart >= 0) stepCountNow - stepCountAtStart
+                    else (coveredKm * 1333).toInt()
+    val liveSilver = calculateSilverReward(liveSteps, coveredKm, elapsedSeconds)
 
     rememberLocationPermission { locationGranted = true }
 
@@ -296,7 +299,7 @@ fun RunScreen(
         if (selectedRoutePoints.isNotEmpty() && phase != RunPhase.PRE_RUN) {
             // 路線跑步頂部：時光銀鹽 banner + 距離/時間統計
             RouteRunningTopPanel(
-                silverPoints   = silverPoints,
+                liveSilver     = liveSilver,
                 coveredKm      = coveredKm,
                 elapsedSeconds = elapsedSeconds
             )
@@ -312,30 +315,10 @@ fun RunScreen(
                     }
                 }
                 RunPhase.RUNNING -> Column {
-                    // 時光銀鹽 banner
-                    Row(
-                        modifier = Modifier.fillMaxWidth()
-                            .background(Color(0xFFF5F0EB))
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(modifier = Modifier.size(34.dp), shape = RoundedCornerShape(50),
-                            color = Color(0xFF5C3D1E)) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Text("銀", color = Color(0xFFD4A96A), fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold)
-                            }
-                        }
-                        Spacer(Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("時光銀鹽", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                            Text("收集數量的進度累計", fontSize = 11.sp, color = TextGray)
-                        }
-                        Text("+$silverPoints", fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold, color = OrangeAccent)
-                    }
-                    // 統計列（無按鈕）
+                    // 統計列（距離 + 時間）
                     DirectRunStatsRow(coveredKm, elapsedSeconds)
+                    // 本次預計銀鹽（距離/時間下方）
+                    RunSilverRow(liveSilver)
                 }
                 RunPhase.PAUSED -> Column {
                     // 橘色確認列
@@ -381,6 +364,7 @@ fun RunScreen(
                         ) { Text("結束跑步", color = Color.White, fontSize = 13.sp) }
                     }
                     DirectRunStatsRow(coveredKm, elapsedSeconds)
+                    RunSilverRow(liveSilver)
                 }
             }
         }

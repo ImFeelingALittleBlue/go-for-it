@@ -39,35 +39,9 @@ fun heritagesOnRoute(
     }.sortedBy { it.second }
 }
 
-// ─── 頂部面板（地圖上方）：時光銀鹽 + 距離/時間統計 ──────────────────────────
+// ─── 頂部面板（地圖上方）：距離/時間統計 + 本次預計銀鹽 ─────────────────────
 @Composable
-fun RouteRunningTopPanel(silverPoints: Int, coveredKm: Float, elapsedSeconds: Int) {
-    // 時光銀鹽 banner（米色背景）
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .background(Color(0xFFF5F0EB))
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Surface(modifier = Modifier.size(34.dp), shape = CircleShape,
-            color = Color(0xFF5C3D1E)) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                Text("銀", color = Color(0xFFD4A96A), fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold)
-            }
-        }
-        Spacer(Modifier.width(10.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text("時光銀鹽", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            Text("收步數與進度累計", fontSize = 11.sp, color = TextGray)
-        }
-        // 本次跑步獲得的銀鹽點數徽章
-        Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFFF5E6CE)) {
-            Text("+$silverPoints",
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                color = OrangeAccent, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-        }
-    }
+fun RouteRunningTopPanel(liveSilver: Int, coveredKm: Float, elapsedSeconds: Int) {
     // 統計列：已跑距離 | 已跑時間
     Row(modifier = Modifier.fillMaxWidth()
         .background(Color.White)
@@ -84,6 +58,8 @@ fun RouteRunningTopPanel(silverPoints: Int, coveredKm: Float, elapsedSeconds: In
             Text("時間", fontSize = 11.sp, color = TextGray)
         }
     }
+    // 本次預計銀鹽（距離/時間下方）
+    RunSilverRow(liveSilver)
 }
 
 // ─── 底部面板（地圖下方）：Podcast 卡 + 最近古蹟 + 按鈕 ─────────────────────
