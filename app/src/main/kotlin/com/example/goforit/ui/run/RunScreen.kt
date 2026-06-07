@@ -241,7 +241,12 @@ fun RunScreen(
     LaunchedEffect(pointCount, phase) {
         if (phase != RunPhase.RUNNING || pointCount == 0) return@LaunchedEffect
         val latest = tracker.points.last()
-        heritages
+        // 路線模式只掃路線上的古蹟；直接跑步掃全部
+        val candidates = if (selectedRoutePoints.isNotEmpty())
+            heritagesOnRoute(selectedRoutePoints, heritages).map { it.first }
+        else
+            heritages
+        candidates
             .filter {
                 !RestorationRepository.isRestored(it.id) &&
                     it.id !in podcastRequestedDuringRun
@@ -525,6 +530,27 @@ fun RunScreen(
                     Text("暫停", color = Color.White, fontSize = 16.sp,
                         fontWeight = FontWeight.Bold)
                 }
+            }
+        }
+
+        // ── [測試用] 手動觸發 Podcast 播放，確認 TTS 正常後可刪除 ────────────
+        if (phase == RunPhase.RUNNING) {
+            // 路線模式取路線第一個古蹟；直接模式取最近古蹟
+            val testTarget = if (selectedRoutePoints.isNotEmpty())
+                heritagesOnRoute(selectedRoutePoints, heritages).firstOrNull()?.first
+            else
+                nearestHeritage ?: heritages.firstOrNull()
+            TextButton(
+                onClick = {
+                    testTarget?.let {
+                        podcastRequestedDuringRun.remove(it.id)
+                        podcastPlayer.play(it)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().background(Color(0xFFFAF5EF))
+            ) {
+                Text("🎧 測試播放：${testTarget?.name ?: "無古蹟"}",
+                    color = OrangeAccent, fontSize = 12.sp)
             }
         }
     }

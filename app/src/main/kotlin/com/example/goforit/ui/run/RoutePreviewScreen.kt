@@ -19,6 +19,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.example.goforit.ui.applyWarmMapStyle
+import kotlinx.coroutines.delay
 import com.example.goforit.ui.home.NearbyHeritageSection
 import com.example.goforit.ui.home.OrangeAccent
 import com.mapbox.geojson.Point
@@ -41,6 +42,15 @@ fun RoutePreviewScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val mapView        = remember { MapView(context) }
     var storyState     by remember { mutableStateOf(StoryState.IDLE) }
+
+    // storyState 變成 GENERATING 時執行（模擬）生成，完成後切到 DONE
+    // 之後可把 delay() 換成 Firebase Functions + Claude API 的真實呼叫
+    LaunchedEffect(storyState) {
+        if (storyState == StoryState.GENERATING) {
+            delay(2000L)
+            storyState = StoryState.DONE
+        }
+    }
 
     DisposableEffect(lifecycleOwner) {
         val obs = object : DefaultLifecycleObserver {

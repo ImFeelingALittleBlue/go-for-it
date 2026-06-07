@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import com.example.goforit.data.HeritageRepository
 import com.example.goforit.data.RouteRecord
 import com.example.goforit.ui.applyWarmMapStyle
 import com.example.goforit.ui.home.OrangeAccent
@@ -48,7 +49,12 @@ fun RecordDetailScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     // textureView=true：讓地圖渲染進 Window 圖層，PixelCopy 才截得到底圖與路線
     val mapView        = remember { MapView(context, MapInitOptions(context = context, textureView = true)) }
+    val heritages      = remember { HeritageRepository.loadHeritages(context) }
     var routePoints    by remember { mutableStateOf<List<Point>>(emptyList()) }
+    // 路線上的古蹟（routePoints 解析完後才有值），傳給 ShareBottomSheet 生成腳本
+    val routeHeritages = remember(routePoints) {
+        heritagesOnRoute(routePoints, heritages).map { it.first }
+    }
     var routeDrawn     by remember { mutableStateOf(false) }
     var showShareSheet   by remember { mutableStateOf(false) }
     var snapBitmap       by remember { mutableStateOf<Bitmap?>(null) }
@@ -181,7 +187,12 @@ fun RecordDetailScreen(
     }
     if (showShareSheet) {
         snapBitmap?.let { bmp ->
-            ShareBottomSheet(routeName = record.name, mapBitmap = bmp, onDismiss = { showShareSheet = false })
+            ShareBottomSheet(
+                routeName      = record.name,
+                mapBitmap      = bmp,
+                routeHeritages = routeHeritages,
+                onDismiss      = { showShareSheet = false }
+            )
         }
     }
 }

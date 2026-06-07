@@ -1,10 +1,10 @@
 package com.example.goforit.ui.run
 
 import android.graphics.Bitmap
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -12,19 +12,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.example.goforit.data.Heritage
+import com.example.goforit.data.HeritageRepository
 import com.example.goforit.ui.applyWarmMapStyle
 import com.example.goforit.ui.home.OrangeAccent
 import com.mapbox.geojson.Point
@@ -48,28 +45,27 @@ fun RunSummaryScreen(
     elapsedSeconds: Int,
     unlockedHeritages: List<Heritage>,
     silverEarned: Int,
-    initialRouteName: String,   // 由 RunScreen 傳入，與存進 Firestore 的名稱一致
+    initialRouteName: String,
     onFinish: () -> Unit
 ) {
     val context        = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    // textureView=true：讓地圖渲染進 Window 圖層，PixelCopy 才截得到底圖與路線
     val mapView        = remember { MapView(context, MapInitOptions(context = context, textureView = true)) }
-    var showShareSheet  by remember { mutableStateOf(false) }
-    var snapBitmap      by remember { mutableStateOf<Bitmap?>(null) }
-    var generatingShare by remember { mutableStateOf(false) }
-
-    // 地區用於副標題（日期 · 地區）
-    val region = remember(trackPoints, routePoints) {
-        detectRegion(trackPoints.ifEmpty { routePoints })
-    }
-    val dateStr = remember {
-        SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()).format(Date())
-    }
-    // 初始名稱來自 RunScreen（與 Firestore 記錄一致）；使用者可在此頁編輯
+    var showShareSheet   by remember { mutableStateOf(false) }
+    var snapBitmap       by remember { mutableStateOf<Bitmap?>(null) }
+    var generatingShare  by remember { mutableStateOf(false) }
     var routeName        by remember { mutableStateOf(initialRouteName) }
     var showRenameDialog by remember { mutableStateOf(false) }
     var editingName      by remember { mutableStateOf("") }
+
+    // 路線古蹟：有 GPX 路線時用路線算，直接跑步時用解鎖古蹟代替
+    val allHeritages   = remember { HeritageRepository.loadHeritages(context) }
+    val routeHeritages = remember(routePoints) {
+        if (routePoints.isNotEmpty()) heritagesOnRoute(routePoints, allHeritages).map { it.first }
+        else unlockedHeritages
+    }
+    val region  = remember(trackPoints, routePoints) { detectRegion(trackPoints.ifEmpty { routePoints }) }
+    val dateStr = remember { SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()).format(Date()) }
 
     DisposableEffect(lifecycleOwner) {
         val obs = object : DefaultLifecycleObserver {
@@ -89,16 +85,13 @@ fun RunSummaryScreen(
             TextButton(onClick = onFinish, modifier = Modifier.align(Alignment.CenterStart)) {
                 Text("← 返回", color = Color(0xFF1A1A1A), fontSize = 14.sp)
             }
-            // 路線名稱（可編輯）+ 日期/地區小字
             Column(modifier = Modifier.align(Alignment.Center),
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(routeName, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     Spacer(Modifier.width(2.dp))
-                    IconButton(
-                        onClick = { editingName = routeName; showRenameDialog = true },
-                        modifier = Modifier.size(28.dp)
-                    ) {
+                    IconButton(onClick = { editingName = routeName; showRenameDialog = true },
+                        modifier = Modifier.size(28.dp)) {
                         Text("✏", fontSize = 13.sp, color = Color(0xFF888888))
                     }
                 }
@@ -114,17 +107,13 @@ fun RunSummaryScreen(
                         mapboxMap.loadStyleUri(Style.MAPBOX_STREETS) {
                             applyWarmMapStyle(it)
                             val center = routePoints.getOrElse(routePoints.size / 2) {
-                                Point.fromLngLat(120.2028, 23.0000)
-                            }
-                            mapboxMap.setCamera(
-                                CameraOptions.Builder().center(center).zoom(13.0).build())
+                                Point.fromLngLat(120.2028, 23.0000) }
+                            mapboxMap.setCamera(CameraOptions.Builder().center(center).zoom(13.0).build())
                             val mgr = annotations.createPolylineAnnotationManager()
-                            if (routePoints.size >= 2)
-                                mgr.create(PolylineAnnotationOptions()
-                                    .withPoints(routePoints).withLineColor("#C8A46A").withLineWidth(3.0))
-                            if (trackPoints.size >= 2)
-                                mgr.create(PolylineAnnotationOptions()
-                                    .withPoints(trackPoints).withLineColor("#D4822A").withLineWidth(5.0))
+                            if (routePoints.size >= 2) mgr.create(PolylineAnnotationOptions()
+                                .withPoints(routePoints).withLineColor("#C8A46A").withLineWidth(3.0))
+                            if (trackPoints.size >= 2) mgr.create(PolylineAnnotationOptions()
+                                .withPoints(trackPoints).withLineColor("#D4822A").withLineWidth(5.0))
                         }
                     }
                 },
@@ -136,48 +125,34 @@ fun RunSummaryScreen(
         Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Spacer(Modifier.height(12.dp))
 
-            // 統計三欄
+            // 1. Podcast 卡（深棕色）含下載按鈕
+            SummaryPodcastCard(routeName = routeName, routeHeritages = routeHeritages)
+
+            Spacer(Modifier.height(10.dp))
+
+            // 2. 此次獲得銀鹽
             Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 shape = RoundedCornerShape(12.dp), color = Color.White) {
-                Row(modifier = Modifier.padding(vertical = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly) {
-                    SummaryStatItem("${"%.2f".format(coveredKm)} km", "距離")
-                    SummaryStatItem(formatOverlayTime(elapsedSeconds), "時間")
-                    SummaryStatItem("+$silverEarned", "時光銀鹽")
-                }
-            }
-
-            Spacer(Modifier.height(10.dp))
-
-            // 故事生成卡（IDLE / GENERATING 兩個狀態）
-            SummaryStoryCard()
-
-            Spacer(Modifier.height(10.dp))
-
-            // AI Podcast 佔位卡
-            Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(12.dp), color = Color(0xFF3A2416)) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("AI生成 Podcast", fontSize = 11.sp, color = Color(0xFFD4A96A),
-                        fontWeight = FontWeight.Medium)
-                    Spacer(Modifier.height(6.dp))
-                    Text("語音導覽生成後將出現在此處",
-                        fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedButton(onClick = {}, enabled = false,
-                        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
-                        Text("下載 Podcast（功能開發中）", fontSize = 13.sp)
+                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                    Text("此次獲得銀鹽", fontSize = 13.sp, color = Color(0xFF888888))
+                    Spacer(Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text("+$silverEarned", fontSize = 36.sp,
+                            fontWeight = FontWeight.Bold, color = Color(0xFF2C2218))
+                        Spacer(Modifier.width(6.dp))
+                        Text("銀鹽", fontSize = 14.sp, color = Color(0xFF888888),
+                            modifier = Modifier.padding(bottom = 6.dp))
                     }
                 }
             }
 
-            // 本次解鎖古蹟
+            // 3. 經過古蹟列表
             if (unlockedHeritages.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
                 Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     shape = RoundedCornerShape(12.dp), color = Color.White) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("本次解鎖古蹟", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("經過古蹟", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         Spacer(Modifier.height(8.dp))
                         unlockedHeritages.forEach { h ->
                             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
@@ -188,8 +163,8 @@ fun RunSummaryScreen(
                                         fontSize = 12.sp, color = Color(0xFF888888))
                                 }
                                 Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFF4CAF50)) {
-                                    Text("已解鎖", modifier = Modifier.padding(
-                                        horizontal = 10.dp, vertical = 4.dp),
+                                    Text("✓ 已解鎖",
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                         color = Color.White, fontSize = 12.sp)
                                 }
                             }
@@ -207,17 +182,12 @@ fun RunSummaryScreen(
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onFinish,
                 modifier = Modifier.weight(1f).height(48.dp),
-                shape = RoundedCornerShape(24.dp)) {
-                Text("再跑一次", fontSize = 14.sp)
-            }
+                shape = RoundedCornerShape(24.dp)) { Text("再跑一次", fontSize = 14.sp) }
             Button(
                 onClick = {
                     generatingShare = true
-                    // 截取 MapView 目前畫面（地圖底圖 + 路線折線已一起渲染）
                     captureMapSnapshot(mapView) { bmp ->
-                        snapBitmap = bmp
-                        generatingShare = false
-                        showShareSheet = true
+                        snapBitmap = bmp; generatingShare = false; showShareSheet = true
                     }
                 },
                 enabled = !generatingShare,
@@ -225,125 +195,111 @@ fun RunSummaryScreen(
                 shape = RoundedCornerShape(24.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)
             ) {
-                Text(if (generatingShare) "生成中..." else "分享", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text(if (generatingShare) "生成中..." else "分享",
+                    color = Color.White, fontWeight = FontWeight.SemiBold)
             }
         }
     }
 
-    // ── 重新命名路線對話框 ──────────────────────────────────────────────
     if (showRenameDialog) {
         AlertDialog(
             onDismissRequest = { showRenameDialog = false },
             title = { Text("重新命名路線", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
-            text = {
-                OutlinedTextField(
-                    value = editingName,
-                    onValueChange = { editingName = it },
-                    singleLine = true,
-                    label = { Text("路線名稱") }
-                )
-            },
-            confirmButton = {
-                Button(onClick = {
-                    if (editingName.isNotBlank()) routeName = editingName
-                    showRenameDialog = false
-                }) { Text("確認") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRenameDialog = false }) { Text("取消") }
-            }
+            text = { OutlinedTextField(value = editingName, onValueChange = { editingName = it },
+                singleLine = true, label = { Text("路線名稱") }) },
+            confirmButton = { Button(onClick = {
+                if (editingName.isNotBlank()) routeName = editingName; showRenameDialog = false
+            }) { Text("確認") } },
+            dismissButton = { TextButton(onClick = { showRenameDialog = false }) { Text("取消") } }
         )
     }
 
-    // ── 分享底頁（地圖截圖 + Podcast 區塊）────────────────────────────
     if (showShareSheet) {
         snapBitmap?.let { bmp ->
-            ShareBottomSheet(
-                routeName = routeName,
-                mapBitmap = bmp,
-                onDismiss = { showShareSheet = false }
-            )
+            ShareBottomSheet(routeName = routeName, mapBitmap = bmp,
+                routeHeritages = routeHeritages, onDismiss = { showShareSheet = false })
         }
     }
 }
 
-// 故事生成卡：IDLE 顯示「為這條路線生成故事？」，GENERATING 顯示 loading
+// Podcast 卡：深棕色背景，含下載語音 WAV 功能
 @Composable
-private fun SummaryStoryCard() {
-    var state by remember { mutableStateOf(StoryState.IDLE) }
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(12.dp), color = Color.White
-    ) {
+private fun SummaryPodcastCard(routeName: String, routeHeritages: List<Heritage>) {
+    val context = LocalContext.current
+    var isExporting    by remember { mutableStateOf(false) }
+    var exportDone     by remember { mutableStateOf(false) }
+    var exportFailed   by remember { mutableStateOf(false) }
+    var exportProgress by remember { mutableStateOf(0 to 0) }
+
+    Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(12.dp), color = Color(0xFF2C2218)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("AI生成 Podcast", fontSize = 11.sp, color = Color(0xFFD4A96A),
-                fontWeight = FontWeight.Medium)
-            Spacer(Modifier.height(8.dp))
-            when (state) {
-                StoryState.IDLE -> {
-                    Text("為這條路線生成路線故事？",
-                        fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(4.dp))
-                    Text("AI 將根據路線上的古蹟生成語音導覽故事",
-                        fontSize = 13.sp, color = Color(0xFF888888))
-                    Spacer(Modifier.height(14.dp))
-                    Button(
-                        onClick = { state = StoryState.GENERATING },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5C3D1E))
-                    ) {
-                        Text("生成路線故事", color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(vertical = 2.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(modifier = Modifier.size(40.dp), shape = CircleShape,
+                    color = Color(0xFF3D2E1C)) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Text("▶", color = Color(0xFFD4A96A), fontSize = 14.sp)
                     }
                 }
-                StoryState.GENERATING -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp, color = OrangeAccent)
-                        Spacer(Modifier.width(10.dp))
-                        Text("生成路線故事中...",
-                            fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text("正在根據路線上的古蹟生成導覽故事，請稍候",
-                        fontSize = 13.sp, color = Color(0xFF888888))
-                    Spacer(Modifier.height(10.dp))
-                    TextButton(onClick = { state = StoryState.IDLE },
-                        modifier = Modifier.align(Alignment.End)) {
-                        Text("取消", color = Color(0xFF888888), fontSize = 13.sp)
-                    }
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("AI 旁白 Podcast", fontSize = 11.sp, color = Color(0xFF9E8E7A))
+                    Text(routeName, fontSize = 15.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("含 ${routeHeritages.size} 個古蹟停靠點",
+                        fontSize = 11.sp, color = Color(0xFF9E8E7A))
                 }
-                StoryState.DONE -> {
-                    Text("語音導覽生成完成", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            }
+            if (isExporting) {
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp, color = OrangeAccent)
+                    Spacer(Modifier.width(8.dp))
+                    Text("合成中... (${exportProgress.first}/${exportProgress.second} 行)",
+                        fontSize = 12.sp, color = Color(0xFF9E8E7A))
                 }
+            }
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = {
+                    if (!isExporting && !exportDone && routeHeritages.isNotEmpty()) {
+                        isExporting = true; exportFailed = false
+                        exportPodcastToWav(context, routeName, routeHeritages,
+                            onProgress = { cur, total -> exportProgress = cur to total },
+                            onComplete = { ok -> isExporting = false
+                                if (ok) exportDone = true else exportFailed = true })
+                    }
+                },
+                enabled = routeHeritages.isNotEmpty() && !isExporting && !exportDone,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)
+            ) {
+                Text(when {
+                    exportDone               -> "✓ 已下載至 Downloads"
+                    isExporting              -> "合成中，請稍候..."
+                    exportFailed             -> "下載失敗，請重試"
+                    routeHeritages.isEmpty() -> "（無路線古蹟）"
+                    else                     -> "下載 Podcast"
+                }, color = Color.White, fontWeight = FontWeight.SemiBold)
             }
         }
     }
 }
 
-@Composable
-private fun SummaryStatItem(value: String, label: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2C2218))
-        Text(label, fontSize = 12.sp, color = Color(0xFF888888))
-    }
-}
-
-// 依路線中心點的經緯度，推算最接近的台南行政區名稱
+// 依路線座標推算最接近的台南行政區
 internal fun detectRegion(points: List<Point>): String {
     if (points.isEmpty()) return "台南市"
     val lat = points.map { it.latitude() }.average()
     val lng = points.map { it.longitude() }.average()
     return when {
-        lng < 120.17             -> "安平區"
-        lat > 23.04              -> "安南區"
-        lat > 23.01 && lng < 120.21 -> "北區"
-        lat > 23.01              -> "永康區"
-        lng < 120.20             -> "中西區"
-        lng < 120.22             -> "東區"
-        lat < 22.98              -> "南區"
-        else                     -> "台南市區"
+        lng < 120.17                  -> "安平區"
+        lat > 23.04                   -> "安南區"
+        lat > 23.01 && lng < 120.21   -> "北區"
+        lat > 23.01                   -> "永康區"
+        lng < 120.20                  -> "中西區"
+        lng < 120.22                  -> "東區"
+        lat < 22.98                   -> "南區"
+        else                          -> "台南市區"
     }
 }

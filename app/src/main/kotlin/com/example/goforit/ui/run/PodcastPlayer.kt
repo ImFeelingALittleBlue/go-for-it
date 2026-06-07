@@ -121,7 +121,8 @@ class DefaultPodcastPlayer(
 }
 
 // 模板式兩人對話（之後可替換成 Firebase Functions + Claude API 生成的腳本）
-private fun generateDialogue(heritage: Heritage): List<DialogueLine> {
+// internal：讓同 package 的 ShareSheet 可以呼叫來生成下載腳本
+internal fun generateDialogue(heritage: Heritage): List<DialogueLine> {
     val name = heritage.name
     val year = heritage.year.ifBlank { "日治時期" }
     // 描述只取前 50 字，避免 TTS 一次唸太長
