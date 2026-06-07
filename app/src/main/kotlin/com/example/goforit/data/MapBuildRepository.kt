@@ -51,6 +51,10 @@ object MapBuildRepository {
     fun isBuilt(heritageId: Int): Boolean =
         records.any { it.heritageId == heritageId }
 
+    fun delete(docId: String) {
+        collection()?.document(docId)?.delete()
+    }
+
     private fun collection(): CollectionReference? {
         val uid = Firebase.auth.currentUser?.uid ?: return null
         return Firebase.firestore

@@ -26,8 +26,13 @@ android {
             rootProject.file("local.properties").takeIf { it.exists() }
                 ?.inputStream()?.use { props.load(it) }
         }
+        val legacyGoogleMapsApiKey = localProps.getProperty("GOOGLE_MAPS_API_KEY", "")
         resValue("string", "mapbox_access_token",
             localProps.getProperty("MAPBOX_PUBLIC_TOKEN", ""))
+        resValue("string", "places_api_key",
+            localProps.getProperty("PLACES_API_KEY", legacyGoogleMapsApiKey))
+        resValue("string", "street_view_api_key",
+            localProps.getProperty("STREET_VIEW_API_KEY", legacyGoogleMapsApiKey))
     }
 
     buildTypes {
@@ -99,6 +104,8 @@ dependencies {
     implementation("androidx.credentials:credentials:1.3.0")               // 統一的憑證管理介面
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0") // 接 Google Play 服務
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1") // 解析 Google 身分權杖
+    implementation("com.google.android.material:material:1.12.0")
+    implementation("com.google.android.libraries.places:places:4.3.1")
 
     // ── Mapbox 地圖 ──────────────────────────────────────────────────────────
     implementation("com.mapbox.maps:android:11.9.0")

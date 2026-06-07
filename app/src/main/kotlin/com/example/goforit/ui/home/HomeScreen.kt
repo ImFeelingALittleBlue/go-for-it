@@ -1,9 +1,13 @@
 package com.example.goforit.ui.home
 
+import android.util.Log
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,9 +20,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.example.goforit.data.Heritage
@@ -40,6 +46,14 @@ import com.mapbox.maps.plugin.annotation.generated.CircleAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.CircleAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.OnCircleAnnotationClickListener
 import com.mapbox.maps.plugin.annotation.generated.createCircleAnnotationManager
+import com.mapbox.maps.plugin.gestures.gestures
+import com.google.android.libraries.places.api.Places
+import com.google.android.libraries.places.api.model.AutocompletePrediction
+import com.google.android.libraries.places.api.model.AutocompleteSessionToken
+import com.google.android.libraries.places.api.model.Place
+import com.google.android.libraries.places.api.net.FetchPlaceRequest
+import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRequest
+import com.google.android.gms.common.api.ApiException
 import com.mapbox.maps.plugin.locationcomponent.location
 import kotlinx.coroutines.delay
 import kotlin.math.PI
@@ -59,13 +73,24 @@ private const val BUILT_BUILDINGS_ROOF_LAYER_ID = "built-heritage-buildings-roof
 private const val BUILT_BUILDINGS_TOWER_LAYER_ID = "built-heritage-towers-layer"
 private const val BUILT_BUILDING_SIZE_METERS = 145.0
 
-enum class HeritageFilter { ALL, RESTORED, PENDING }
+enum class HeritageFilter { ALL, RESTORED, PENDING, BUILT }
+
+private data class SelectedPlace(
+    val name: String,
+    val address: String,
+    val point: Point
+)
 
 @Composable
-fun HomeScreen() {
+fun HomeScreen(
+    onStartExplore: () -> Unit = {}
+) {
     val context        = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val mapView        = remember { MapView(context) }
+    val placesClient = remember {
+        if (Places.isInitialized()) Places.createClient(context) else null
+    }
 
     // 讀取 CSV 裡的古蹟資料（只在第一次組畫面時讀一次）
     val heritages = remember { HeritageRepository.loadHeritages(context) }
@@ -74,16 +99,58 @@ fun HomeScreen() {
     val buildRecords = MapBuildRepository.records().toList()
     val builtIds = buildRecords.map { it.heritageId }.toSet()
     var heritageFilter by remember { mutableStateOf(HeritageFilter.ALL) }
-    val visibleHeritages = when (heritageFilter) {
+    var searchQuery by remember { mutableStateOf("") }
+    var searchSuggestions by remember {
+        mutableStateOf<List<AutocompletePrediction>>(emptyList())
+    }
+    var searchError by remember { mutableStateOf<String?>(null) }
+    var selectedPlace by remember { mutableStateOf<SelectedPlace?>(null) }
+    var searchSessionToken by remember { mutableStateOf(AutocompleteSessionToken.newInstance()) }
+    val statusFilteredHeritages = when (heritageFilter) {
         HeritageFilter.ALL -> heritages
         HeritageFilter.RESTORED -> heritages.filter { it.id in restoredIds }
         HeritageFilter.PENDING -> heritages.filter { it.id !in restoredIds }
+        HeritageFilter.BUILT -> heritages.filter { it.id in builtIds }
     }
+    val visibleHeritages = statusFilteredHeritages
     var markerManager by remember { mutableStateOf<CircleAnnotationManager?>(null) }
+    var searchMarkerManager by remember { mutableStateOf<CircleAnnotationManager?>(null) }
     val markerLookup = remember { mutableMapOf<String, Heritage>() }
     var markerClickListenerInstalled by remember { mutableStateOf(false) }
     var buildingScale by remember { mutableFloatStateOf(1f) }
     var knownBuiltIds by remember { mutableStateOf<Set<Int>?>(null) }
+
+    LaunchedEffect(searchQuery) {
+        searchError = null
+        val query = searchQuery.trim()
+        if (query.length < 2 || selectedPlace?.name == query) {
+            searchSuggestions = emptyList()
+            return@LaunchedEffect
+        }
+        if (placesClient == null) {
+            searchError = "尚未設定 Google Maps API key"
+            return@LaunchedEffect
+        }
+        delay(350L)
+        val request = FindAutocompletePredictionsRequest.builder()
+            .setQuery(query)
+            .setCountries("TW")
+            .setSessionToken(searchSessionToken)
+            .build()
+        placesClient.findAutocompletePredictions(request)
+            .addOnSuccessListener { response ->
+                if (searchQuery.trim() == query) {
+                    searchSuggestions = response.autocompletePredictions.take(5)
+                }
+            }
+            .addOnFailureListener { exception ->
+                if (searchQuery.trim() == query) {
+                    searchSuggestions = emptyList()
+                    Log.e("PlacesSearch", "Autocomplete failed", exception)
+                    searchError = placesErrorMessage(exception)
+                }
+            }
+    }
 
     // 地圖跟著 Activity 生命週期啟動 / 暫停 / 銷毀
     DisposableEffect(lifecycleOwner) {
@@ -126,13 +193,66 @@ fun HomeScreen() {
         modifier = Modifier.fillMaxSize().background(Color.White)
     ) {
         // ── 搜尋列 ──────────────────────────────────────────────────────────
-        HomeSearchBar()
+        Box(modifier = Modifier.zIndex(2f)) {
+            HomeSearchBar(
+                query = searchQuery,
+                onQueryChange = {
+                    searchQuery = it
+                    selectedPlace = null
+                }
+            )
+            if (searchSuggestions.isNotEmpty() || searchError != null) {
+                PlaceSuggestionsCard(
+                    suggestions = searchSuggestions,
+                    error = searchError,
+                    onSelect = { prediction ->
+                        val client = placesClient ?: return@PlaceSuggestionsCard
+                        val request = FetchPlaceRequest.builder(
+                            prediction.placeId,
+                            listOf(
+                                Place.Field.DISPLAY_NAME,
+                                Place.Field.FORMATTED_ADDRESS,
+                                Place.Field.LOCATION
+                            )
+                        )
+                            .setSessionToken(searchSessionToken)
+                            .build()
+                        client.fetchPlace(request)
+                            .addOnSuccessListener { response ->
+                                val place = response.place
+                                val latLng = place.location ?: return@addOnSuccessListener
+                                val result = SelectedPlace(
+                                    name = place.displayName ?: prediction.getPrimaryText(null).toString(),
+                                    address = place.formattedAddress.orEmpty(),
+                                    point = Point.fromLngLat(latLng.longitude, latLng.latitude)
+                                )
+                                selectedPlace = result
+                                searchQuery = result.name
+                                searchSuggestions = emptyList()
+                                searchSessionToken = AutocompleteSessionToken.newInstance()
+                            }
+                            .addOnFailureListener { exception ->
+                                Log.e("PlacesSearch", "Place details failed", exception)
+                                searchError = placesErrorMessage(exception)
+                            }
+                    }
+                )
+            }
+        }
 
         // ── 地圖（占畫面 55%）───────────────────────────────────────────────
         Box(modifier = Modifier.weight(0.55f)) {
             AndroidView(
                 factory = {
                     mapView.apply {
+                        gestures.updateSettings {
+                            pinchToZoomEnabled = true
+                            pinchScrollEnabled = true
+                            scrollEnabled = true
+                            doubleTapToZoomInEnabled = true
+                            doubleTouchToZoomOutEnabled = true
+                            quickZoomEnabled = true
+                        }
                         mapboxMap.loadStyleUri(Style.MAPBOX_STREETS) {
                             applyWarmMapStyle(it)
                             mapboxMap.setCamera(
@@ -154,6 +274,10 @@ fun HomeScreen() {
                     mv.mapboxMap.getStyle {
                         val manager = markerManager
                             ?: mv.annotations.createCircleAnnotationManager().also { markerManager = it }
+                        val placeManager = searchMarkerManager
+                            ?: mv.annotations.createCircleAnnotationManager().also {
+                                searchMarkerManager = it
+                            }
                         if (!markerClickListenerInstalled) {
                             manager.addClickListener(
                                 OnCircleAnnotationClickListener { annotation ->
@@ -169,6 +293,23 @@ fun HomeScreen() {
                             scale = buildingScale
                         )
                         setHeritageMarkers(manager, visibleHeritages, restoredIds, builtIds, markerLookup)
+                        placeManager.deleteAll()
+                        selectedPlace?.let { place ->
+                            placeManager.create(
+                                CircleAnnotationOptions()
+                                    .withPoint(place.point)
+                                    .withCircleRadius(11.0)
+                                    .withCircleColor("#356AE6")
+                                    .withCircleStrokeWidth(3.0)
+                                    .withCircleStrokeColor("#FFFFFF")
+                            )
+                            mv.mapboxMap.setCamera(
+                                CameraOptions.Builder()
+                                    .center(place.point)
+                                    .zoom(16.0)
+                                    .build()
+                            )
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxSize()
@@ -179,19 +320,29 @@ fun HomeScreen() {
 
         // ── 全部古蹟列表（占 45%）：用狀態區分已修復 / 待修復 ───────────────
         MapHeritageSection(
-            heritages = heritages,
+            heritages = visibleHeritages,
             records = restorationRecords,
             builtIds = builtIds,
-            selectedFilter = heritageFilter,
+            selectedFilter = HeritageFilter.ALL,
             onFilterChange = { heritageFilter = it },
             onHeritageClick = { selected = it },
-            modifier = Modifier.weight(0.70f)
+            modifier = Modifier.weight(0.70f),
+            filterHeritages = false,
+            chipHeritages = heritages,
+            chipSelectedFilter = heritageFilter
         )
     }
 
     // ── 古蹟詳情卡：selected 有值才顯示 ──────────────────────────────────────
     selected?.let { heritage ->
-        HeritageDetailSheet(heritage = heritage, onDismiss = { selected = null })
+        HeritageDetailSheet(
+            heritage = heritage,
+            onDismiss = { selected = null },
+            onStartExplore = {
+                selected = null
+                onStartExplore()
+            }
+        )
     }
 }
 
@@ -386,8 +537,22 @@ private fun easeOutBack(t: Float): Float {
     return 1f + c3 * x * x * x + c1 * x * x
 }
 
+private fun placesErrorMessage(exception: Exception): String {
+    val detail = exception.message?.substringBefore('\n')?.takeIf { it.isNotBlank() }
+    val status = (exception as? ApiException)?.statusCode
+    return when {
+        status != null && detail != null -> "Google Places 錯誤 $status：$detail"
+        status != null -> "Google Places 錯誤 $status，請檢查 API key 限制與 Places API (New)"
+        detail != null -> "無法搜尋地點：$detail"
+        else -> "無法搜尋地點，請檢查網路與 Google Places 設定"
+    }
+}
+
 @Composable
-fun HomeSearchBar() {
+fun HomeSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit
+) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -396,13 +561,110 @@ fun HomeSearchBar() {
         color = ChipBg,
         shadowElevation = 2.dp
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.Search, contentDescription = null, tint = TextGray)
-            Spacer(Modifier.width(8.dp))
-            Text("搜尋你的地圖", color = TextGray, fontSize = 14.sp)
+        TextField(
+            value = query,
+            onValueChange = onQueryChange,
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("搜尋你的地圖", color = TextGray, fontSize = 14.sp) },
+            leadingIcon = {
+                Icon(Icons.Default.Search, contentDescription = null, tint = TextGray)
+            },
+            trailingIcon = if (query.isNotEmpty()) {
+                {
+                    IconButton(onClick = { onQueryChange("") }) {
+                        Icon(Icons.Default.Close, contentDescription = "清除搜尋", tint = TextGray)
+                    }
+                }
+            } else {
+                null
+            },
+            singleLine = true,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
+            )
+        )
+    }
+}
+
+@Composable
+private fun PlaceSuggestionsCard(
+    suggestions: List<AutocompletePrediction>,
+    error: String?,
+    onSelect: (AutocompletePrediction) -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(top = 72.dp),
+        shape = RoundedCornerShape(18.dp),
+        color = Color.White,
+        shadowElevation = 8.dp
+    ) {
+        Column {
+            if (error != null) {
+                Text(
+                    text = error,
+                    modifier = Modifier.padding(16.dp),
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 13.sp
+                )
+            } else {
+                suggestions.forEachIndexed { index, prediction ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(prediction) }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = OrangeAccent,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = prediction.getPrimaryText(null).toString(),
+                                color = Color(0xFF2F2925),
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            val secondaryText = prediction.getSecondaryText(null).toString()
+                            if (secondaryText.isNotBlank()) {
+                                Text(
+                                    text = secondaryText,
+                                    color = TextGray,
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                    if (index < suggestions.lastIndex) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 14.dp),
+                            color = Color(0xFFEDE9E4)
+                        )
+                    }
+                }
+                Text(
+                    text = "Powered by Google",
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    color = TextGray,
+                    fontSize = 10.sp
+                )
+            }
         }
     }
 }

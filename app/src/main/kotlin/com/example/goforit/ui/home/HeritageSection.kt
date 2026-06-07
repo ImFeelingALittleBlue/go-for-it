@@ -39,16 +39,24 @@ fun MapHeritageSection(
     selectedFilter: HeritageFilter,
     onFilterChange: (HeritageFilter) -> Unit,
     onHeritageClick: (Heritage) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    filterHeritages: Boolean = true,
+    chipHeritages: List<Heritage> = heritages,
+    chipSelectedFilter: HeritageFilter = selectedFilter
 ) {
     val restoredAtById = records.associate { it.heritageId to it.restoredAt }
-    val restoredCount = heritages.count { it.id in restoredAtById }
-    val pendingCount = heritages.size - restoredCount
-    val builtCount = heritages.count { it.id in builtIds }
-    val filteredHeritages = when (selectedFilter) {
-        HeritageFilter.ALL -> heritages
-        HeritageFilter.RESTORED -> heritages.filter { it.id in restoredAtById }
-        HeritageFilter.PENDING -> heritages.filter { it.id !in restoredAtById }
+    val restoredCount = chipHeritages.count { it.id in restoredAtById }
+    val pendingCount = chipHeritages.size - restoredCount
+    val builtCount = chipHeritages.count { it.id in builtIds }
+    val filteredHeritages = if (!filterHeritages) {
+        heritages
+    } else {
+        when (selectedFilter) {
+            HeritageFilter.ALL -> heritages
+            HeritageFilter.RESTORED -> heritages.filter { it.id in restoredAtById }
+            HeritageFilter.PENDING -> heritages.filter { it.id !in restoredAtById }
+            HeritageFilter.BUILT -> heritages.filter { it.id in builtIds }
+        }
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -69,15 +77,15 @@ fun MapHeritageSection(
         ) {
             item {
                 StatusChip(
-                    text = "全部 ${heritages.size}",
-                    active = selectedFilter == HeritageFilter.ALL,
+                    text = "全部 ${chipHeritages.size}",
+                    active = chipSelectedFilter == HeritageFilter.ALL,
                     onClick = { onFilterChange(HeritageFilter.ALL) }
                 )
             }
             item {
                 StatusChip(
                     text = "已修復 $restoredCount",
-                    active = selectedFilter == HeritageFilter.RESTORED,
+                    active = chipSelectedFilter == HeritageFilter.RESTORED,
                     indicatorColor = Color(0xFF4CAF50),
                     onClick = { onFilterChange(HeritageFilter.RESTORED) }
                 )
@@ -85,7 +93,7 @@ fun MapHeritageSection(
             item {
                 StatusChip(
                     text = "待修復 $pendingCount",
-                    active = selectedFilter == HeritageFilter.PENDING,
+                    active = chipSelectedFilter == HeritageFilter.PENDING,
                     indicatorColor = OrangeAccent,
                     onClick = { onFilterChange(HeritageFilter.PENDING) }
                 )
@@ -93,8 +101,9 @@ fun MapHeritageSection(
             item {
                 StatusChip(
                     text = "已創建 $builtCount",
-                    active = false,
-                    indicatorColor = Color(0xFF9B6A3F)
+                    active = chipSelectedFilter == HeritageFilter.BUILT,
+                    indicatorColor = Color(0xFF9B6A3F),
+                    onClick = { onFilterChange(HeritageFilter.BUILT) }
                 )
             }
         }
