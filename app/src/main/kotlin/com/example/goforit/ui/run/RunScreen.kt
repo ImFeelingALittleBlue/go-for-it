@@ -22,6 +22,10 @@ import com.example.goforit.data.HeritageRepository
 import com.example.goforit.data.PendingRunStore
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.RouteRepository
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import com.example.goforit.data.SilverSaltStore
 import com.example.goforit.ui.applyWarmMapStyle
 import com.example.goforit.ui.home.OrangeAccent
@@ -64,7 +68,19 @@ private sealed class RunNav {
 // 跑步的兩個階段
 private enum class RunPhase { PRE_RUN, RUNNING, PAUSED }
 private const val HERITAGE_UNLOCK_RADIUS_METERS = 40.0
-private const val HERITAGE_UNLOCK_REWARD = 10   // 解鎖一個古蹟獲得的時光銀鹽
+private const val HERITAGE_SILVER_PER_SITE = 100  // 解鎖一個古蹟獲得 100 時光銀鹽
+
+// 計算本次跑步獲得的時光銀鹽
+// 公式：Steps × 0.013 × (0.5 + Speed/10)，Speed > 20km/hr 則歸零
+// heritageCount：本次解鎖的古蹟數，每個固定加 100
+fun calculateSilverReward(steps: Int, coveredKm: Float, elapsedSeconds: Int, heritageCount: Int): Int {
+    val avgSpeedKmh = if (elapsedSeconds > 0)
+        (coveredKm / (elapsedSeconds / 3600.0)) else 0.0
+    val runReward = if (avgSpeedKmh <= 20.0)
+        (steps * 0.013 * (0.5 + avgSpeedKmh / 10.0)).toInt()
+    else 0
+    return runReward + heritageCount * HERITAGE_SILVER_PER_SITE
+}
 
 @Composable
 fun RunScreen(
@@ -100,6 +116,25 @@ fun RunScreen(
         nearestHeritage?.let { h -> distanceMeters(from.latitude(), from.longitude(), h.lat, h.lng).toFloat() } ?: 999f
     }
     var consumedAutoStartRequest by remember { mutableIntStateOf(0) }
+
+    // 計步器：記錄開始跑步時的累計步數，結束時相減得到本次步數
+    // TYPE_STEP_COUNTER 從手機開機後持續累計，不會重設
+    val sensorManager = remember { context.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
+    val stepSensor    = remember { sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) }
+    var stepCountAtStart by remember { mutableIntStateOf(-1) }   // -1 = 尚未記錄
+    var stepCountNow     by remember { mutableIntStateOf(0) }
+    val stepListener = remember {
+        object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                val total = event.values[0].toInt()
+                // 第一個事件：記錄起始值
+                if (stepCountAtStart < 0) stepCountAtStart = total
+                stepCountNow = total
+            }
+            override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {}
+        }
+    }
+
     val podcastPlayer = remember {
         DefaultPodcastPlayer(
             context = context,
@@ -129,6 +164,18 @@ fun RunScreen(
     }
 
     rememberLocationPermission { locationGranted = true }
+
+    // 計步器：跑步中啟動，停跑後停止
+    LaunchedEffect(phase) {
+        if (phase == RunPhase.RUNNING) {
+            stepCountAtStart = -1  // 重設，第一個感測器事件會記錄起點
+            stepSensor?.let {
+                sensorManager.registerListener(stepListener, it, SensorManager.SENSOR_DELAY_NORMAL)
+            }
+        } else if (phase == RunPhase.PRE_RUN) {
+            sensorManager.unregisterListener(stepListener)
+        }
+    }
 
     // 首頁「立即探索」按鈕 → 自動開始直接跑步
     LaunchedEffect(autoStartRequest, locationGranted) {
@@ -168,6 +215,7 @@ fun RunScreen(
         lifecycleOwner.lifecycle.addObserver(obs)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(obs)
+            sensorManager.unregisterListener(stepListener)
             tracker.stop()
             podcastPlayer.release()
             mapView.onDestroy()
@@ -310,19 +358,21 @@ fun RunScreen(
                             onClick = {
                                 val pts     = tracker.points.toList()
                                 val runName = "台南${detectRegion(pts)}探索"
+                                // 計算步數：感測器有值用感測器，否則從距離估算（1km ≈ 1333步）
+                                val steps = if (stepCountAtStart >= 0) stepCountNow - stepCountAtStart
+                                            else (coveredKm * 1333).toInt()
+                                val silver = calculateSilverReward(steps, coveredKm, elapsedSeconds, unlockedDuringRun.size)
                                 val summary = RunNav.Summary(
                                     trackPoints       = pts,
                                     routePoints       = emptyList(),
                                     coveredKm         = coveredKm,
                                     elapsedSeconds    = elapsedSeconds,
                                     unlockedHeritages = heritages.filter { it.id in unlockedDuringRun },
-                                    silverEarned      = unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD,
+                                    silverEarned      = silver,
                                     routeName         = runName
                                 )
                                 RouteRepository.addRun(runName, pts, "",
-                                    elapsedSeconds,
-                                    unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD,
-                                    unlockedDuringRun.size)
+                                    elapsedSeconds, silver, unlockedDuringRun.size)
                                 tracker.stop()
                                 podcastPlayer.stop()
                                 notifHeritage = null
@@ -488,19 +538,21 @@ fun RunScreen(
                 // 用 GPS 軌跡（或路線點備援）推算地區，生成與結算頁相同的名稱
                 val pts     = tracker.points.toList().ifEmpty { selectedRoutePoints }
                 val runName = "台南${detectRegion(pts)}探索"
+                // 計算步數：感測器有值用感測器，否則從距離估算（1km ≈ 1333步）
+                val steps = if (stepCountAtStart >= 0) stepCountNow - stepCountAtStart
+                            else (coveredKm * 1333).toInt()
+                val silver = calculateSilverReward(steps, coveredKm, elapsedSeconds, unlockedDuringRun.size)
                 val summary = RunNav.Summary(
                     trackPoints       = tracker.points.toList(),
                     routePoints       = selectedRoutePoints.toList(),
                     coveredKm         = coveredKm,
                     elapsedSeconds    = elapsedSeconds,
                     unlockedHeritages = heritages.filter { it.id in unlockedDuringRun },
-                    silverEarned      = unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD,
+                    silverEarned      = silver,
                     routeName         = runName
                 )
                 RouteRepository.addRun(runName, tracker.points.toList(), selectedRouteGpx,
-                    elapsedSeconds,
-                    unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD,
-                    unlockedDuringRun.size)
+                    elapsedSeconds, silver, unlockedDuringRun.size)
                 tracker.stop()
                 podcastPlayer.stop()
                 selectedRoutePoints = emptyList()
