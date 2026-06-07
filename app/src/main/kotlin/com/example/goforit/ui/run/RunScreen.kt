@@ -22,6 +22,7 @@ import com.example.goforit.data.HeritageRepository
 import com.example.goforit.data.PendingRunStore
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.RouteRepository
+import android.content.Context
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
