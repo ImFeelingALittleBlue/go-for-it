@@ -29,6 +29,7 @@ import com.example.goforit.ui.applyWarmMapStyle
 import com.example.goforit.ui.home.OrangeAccent
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
+import com.mapbox.maps.MapInitOptions
 import com.mapbox.maps.MapView
 import com.mapbox.maps.Style
 import com.mapbox.maps.plugin.annotation.annotations
@@ -52,7 +53,8 @@ fun RunSummaryScreen(
 ) {
     val context        = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val mapView        = remember { MapView(context) }
+    // textureView=true：讓地圖渲染進 Window 圖層，PixelCopy 才截得到底圖與路線
+    val mapView        = remember { MapView(context, MapInitOptions(context = context, textureView = true)) }
     var showShareSheet  by remember { mutableStateOf(false) }
     var snapBitmap      by remember { mutableStateOf<Bitmap?>(null) }
     var generatingShare by remember { mutableStateOf(false) }
