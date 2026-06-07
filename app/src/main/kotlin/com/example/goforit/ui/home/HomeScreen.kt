@@ -171,6 +171,12 @@ fun HomeScreen(
     // 目前被點選的古蹟（null = 沒有點任何古蹟，不顯示詳情卡）
     var selected by remember { mutableStateOf<Heritage?>(null) }
 
+    // 篩選標籤切換時，直接用現有 manager 重畫標記（不依賴 AndroidView update 的非同步 getStyle）
+    LaunchedEffect(heritageFilter, markerManager) {
+        val manager = markerManager ?: return@LaunchedEffect
+        setHeritageMarkers(manager, visibleHeritages, restoredIds, builtIds, markerLookup)
+    }
+
     LaunchedEffect(builtIds) {
         val known = knownBuiltIds
         if (known == null) {

@@ -86,7 +86,7 @@ fun MapHeritageSection(
                 StatusChip(
                     text = "已修復 $restoredCount",
                     active = chipSelectedFilter == HeritageFilter.RESTORED,
-                    indicatorColor = Color(0xFF4CAF50),
+                    indicatorColor = OrangeAccent,          // 橘色：已修復
                     onClick = { onFilterChange(HeritageFilter.RESTORED) }
                 )
             }
@@ -94,7 +94,7 @@ fun MapHeritageSection(
                 StatusChip(
                     text = "待修復 $pendingCount",
                     active = chipSelectedFilter == HeritageFilter.PENDING,
-                    indicatorColor = OrangeAccent,
+                    indicatorColor = Color(0xFF888888),     // 灰色：待修復
                     onClick = { onFilterChange(HeritageFilter.PENDING) }
                 )
             }
@@ -102,7 +102,7 @@ fun MapHeritageSection(
                 StatusChip(
                     text = "已創建 $builtCount",
                     active = chipSelectedFilter == HeritageFilter.BUILT,
-                    indicatorColor = Color(0xFF9B6A3F),
+                    indicatorColor = Color(0xFF4CAF50),     // 綠色：已創建
                     onClick = { onFilterChange(HeritageFilter.BUILT) }
                 )
             }
@@ -256,16 +256,16 @@ private fun MapHeritageItem(
         Surface(
             shape = RoundedCornerShape(16.dp),
             color = when {
-                isBuilt -> Color(0xFF9B6A3F)
-                restored -> Color(0xFF4CAF50)
-                else -> OrangeAccent
+                isBuilt  -> Color(0xFF4CAF50)   // 綠色：已創建
+                restored -> OrangeAccent         // 橘色：已修復
+                else     -> Color(0xFF888888)    // 灰色：待修復
             }
         ) {
             Text(
                 text = when {
-                    isBuilt -> "已創建"
-                    restored -> "已解鎖"
-                    else -> "待修復"
+                    isBuilt  -> "已創建"
+                    restored -> "已修復"
+                    else     -> "待修復"
                 },
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 fontSize = 12.sp,
