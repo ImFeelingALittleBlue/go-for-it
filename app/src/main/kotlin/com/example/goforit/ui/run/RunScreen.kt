@@ -389,9 +389,9 @@ fun RunScreen(
                                         .withPoint(Point.fromLngLat(h.lng, h.lat))
                                         .withCircleRadius(7.0)
                                         .withCircleColor(when {
-                                            h.id in builtIds    -> "#4CAF50"  // 已修復：綠色
-                                            h.id in restoredIds -> "#D4822A"  // 已解鎖未修復：橘色
-                                            else                -> "#888888"  // 未解鎖：灰色
+                                            h.id in builtIds    -> "#4CAF50"  // 已創建：綠色
+                                            h.id in restoredIds -> "#D4822A"  // 已修復待創建：橘色
+                                            else                -> "#888888"  // 待修復：灰色
                                         })
                                         .withCircleStrokeWidth(1.5)
                                         .withCircleStrokeColor("#FFFFFF")

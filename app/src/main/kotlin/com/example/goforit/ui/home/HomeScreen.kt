@@ -350,7 +350,7 @@ fun HomeScreen(
     }
 }
 
-// 在地圖上把所有古蹟畫成圓點，已修復 / 待修復使用不同顏色。
+// 在地圖上把所有古蹟畫成圓點，待修復/已修復/已創建使用不同顏色。
 // onMarkerClick：點到某個圓點時，把對應的 Heritage 傳回去
 private fun setHeritageMarkers(
     manager: CircleAnnotationManager,
@@ -367,9 +367,9 @@ private fun setHeritageMarkers(
             .withCircleRadius(if (h.id in builtIds) 4.0 else 8.0)
             .withCircleColor(
                 when {
-                    h.id in builtIds    -> "#4CAF50"  // 已修復：綠色
-                    h.id in restoredIds -> "#D4822A"  // 已解鎖未修復：橘色
-                    else                -> "#888888"  // 未解鎖：灰色
+                    h.id in builtIds    -> "#4CAF50"  // 已創建：綠色
+                    h.id in restoredIds -> "#D4822A"  // 已修復待創建：橘色
+                    else                -> "#888888"  // 待修復：灰色
                 }
             )
             .withCircleStrokeWidth(if (h.id in builtIds) 1.5 else 2.0)
