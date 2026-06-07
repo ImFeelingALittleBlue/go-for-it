@@ -32,7 +32,8 @@ fun AccountScreen() {
 
     // 從現有 Repository 讀取統計數字
     val runCount      = RouteRepository.records().count { it.elapsedSeconds > 0 }
-    val unlockedCount = RestorationRepository.records().size
+    // distinctBy 去重：同一古蹟若被重複寫入，只算一次
+    val unlockedCount = RestorationRepository.records().distinctBy { it.heritageId }.size
     val builtCount    = MapBuildRepository.records().size
 
     // 設定開關狀態（本地暫存）
