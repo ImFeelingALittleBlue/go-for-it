@@ -23,7 +23,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Business
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DirectionsRun
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -55,6 +57,7 @@ import com.example.goforit.data.Heritage
 import com.example.goforit.data.MapBuildRepository
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.SilverSaltStore
+import com.example.goforit.ui.common.SilverSaltHelpButton
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -69,6 +72,7 @@ private const val BUILD_COST = 100
 
 private enum class QuizState { ASKING, CORRECT, WRONG }
 private enum class BuildState { READY, BUILDING }
+private enum class DeleteTarget { RESTORATION, BUILD }
 
 @Composable
 fun HeritageDetailSheet(
@@ -81,11 +85,14 @@ fun HeritageDetailSheet(
     val restorationRecord = RestorationRepository.records()
         .firstOrNull { it.heritageId == heritage.id }
     val isRestored = restorationRecord != null
-    val isBuilt = MapBuildRepository.records().any { it.heritageId == heritage.id }
+    val buildRecord = MapBuildRepository.records()
+        .firstOrNull { it.heritageId == heritage.id }
+    val isBuilt = buildRecord != null
     var quizState by remember(heritage.id) { mutableStateOf<QuizState?>(null) }
     var showOldPhoto by remember(heritage.id) { mutableStateOf(false) }
     var buildState by remember(heritage.id) { mutableStateOf(BuildState.READY) }
     var buildProgress by remember(heritage.id) { mutableStateOf(0f) }
+    var deleteTarget by remember(heritage.id) { mutableStateOf<DeleteTarget?>(null) }
     var locationGranted by remember { mutableStateOf(false) }
     val hasLocationPermission = rememberLocationPermission { locationGranted = true }
     val isNearHeritage by rememberIsNearHeritage(
@@ -123,76 +130,77 @@ fun HeritageDetailSheet(
             modifier = Modifier.fillMaxSize(),
             color = Color(0xFFF8F3EB)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .navigationBarsPadding()
-            ) {
-                DetailTopBar(isRestored = isRestored, onBack = onDismiss)
-
+            Box(modifier = Modifier.fillMaxSize()) {
                 Column(
                     modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
                 ) {
-                    if (quizState != null) {
-                        HeritageQuizHero(
-                            heritage = heritage,
-                            points = points,
-                            state = quizState ?: QuizState.ASKING,
-                            onAnswer = { isCorrect ->
-                                if (isCorrect) {
-                                    val reward = (BUILD_COST - points).coerceAtLeast(0) + 2
-                                    if (reward > 0) {
-                                        SilverSaltStore.add(context, reward)
-                                    }
-                                    quizState = QuizState.CORRECT
-                                } else {
-                                    quizState = QuizState.WRONG
-                                }
-                            },
-                            onRetry = { quizState = QuizState.ASKING },
-                            onCancel = { quizState = null }
-                        )
-                    } else if (!isRestored && isNearHeritage) {
-                        NearbyUnlockHero(
-                            heritage = heritage,
-                            onExplore = onStartExplore
-                        )
-                    } else if (needsMoreSilver && !showOldPhoto) {
-                        InsufficientSilverHero(
-                            points = points,
-                            onQuizClick = {
-                                quizState = QuizState.ASKING
-                            }
-                        )
-                    } else if (canBuild && !showOldPhoto) {
-                        ReadyToBuildHero(
-                            points = points,
-                            state = buildState,
-                            progress = buildProgress,
-                            onBuild = {
-                                if (
-                                    buildState == BuildState.READY &&
-                                    SilverSaltStore.spend(context, BUILD_COST)
-                                ) {
-                                    buildProgress = 0f
-                                    buildState = BuildState.BUILDING
-                                }
-                            }
-                        )
-                    } else if (isRestored) {
-                        HeritagePhoto(heritage.photoFile)
-                    } else {
-                        CurrentStreetView(heritage)
-                    }
+                    DetailTopBar(isRestored = isRestored, onBack = onDismiss)
 
                     Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 16.dp)
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
                     ) {
+                        if (quizState != null) {
+                            HeritageQuizHero(
+                                heritage = heritage,
+                                points = points,
+                                state = quizState ?: QuizState.ASKING,
+                                onAnswer = { isCorrect ->
+                                    if (isCorrect) {
+                                        val reward = (BUILD_COST - points).coerceAtLeast(0) + 2
+                                        if (reward > 0) {
+                                            SilverSaltStore.add(context, reward)
+                                        }
+                                        quizState = QuizState.CORRECT
+                                    } else {
+                                        quizState = QuizState.WRONG
+                                    }
+                                },
+                                onRetry = { quizState = QuizState.ASKING },
+                                onCancel = { quizState = null }
+                            )
+                        } else if (!isRestored && isNearHeritage) {
+                            NearbyUnlockHero(
+                                heritage = heritage,
+                                onExplore = onStartExplore
+                            )
+                        } else if (needsMoreSilver && !showOldPhoto) {
+                            InsufficientSilverHero(
+                                points = points,
+                                onQuizClick = {
+                                    quizState = QuizState.ASKING
+                                }
+                            )
+                        } else if (canBuild && !showOldPhoto) {
+                            ReadyToBuildHero(
+                                points = points,
+                                state = buildState,
+                                progress = buildProgress,
+                                onBuild = {
+                                    if (
+                                        buildState == BuildState.READY &&
+                                        SilverSaltStore.spend(context, BUILD_COST)
+                                    ) {
+                                        buildProgress = 0f
+                                        buildState = BuildState.BUILDING
+                                    }
+                                }
+                            )
+                        } else if (isRestored) {
+                            HeritagePhoto(heritage.photoFile)
+                        } else {
+                            CurrentStreetView(heritage)
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 16.dp)
+                        ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -259,12 +267,59 @@ fun HeritageDetailSheet(
                             buildPanelMode = canBuild,
                             building = buildState == BuildState.BUILDING
                         )
+
+                        if (isRestored || isBuilt) {
+                            Spacer(Modifier.height(12.dp))
+                            RecordDeleteActions(
+                                isRestored = isRestored,
+                                isBuilt = isBuilt,
+                                onDeleteRestoration = {
+                                    deleteTarget = DeleteTarget.RESTORATION
+                                },
+                                onDeleteBuild = {
+                                    deleteTarget = DeleteTarget.BUILD
+                                }
+                            )
+                        }
+                        }
                     }
                 }
+
+                SilverSaltHelpButton(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                        .padding(end = 16.dp, bottom = 16.dp)
+                )
             }
         }
     }
 
+    deleteTarget?.let { target ->
+        DeleteRecordDialog(
+            target = target,
+            onConfirm = {
+                when (target) {
+                    DeleteTarget.BUILD -> {
+                        buildRecord?.docId
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let(MapBuildRepository::delete)
+                    }
+                    DeleteTarget.RESTORATION -> {
+                        buildRecord?.docId
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let(MapBuildRepository::delete)
+                        restorationRecord?.docId
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let(RestorationRepository::delete)
+                    }
+                }
+                deleteTarget = null
+                onDismiss()
+            },
+            onDismiss = { deleteTarget = null }
+        )
+    }
 }
 
 @Composable
@@ -784,6 +839,98 @@ private fun HeritageActionButton(
             }
         }
     }
+}
+
+@Composable
+private fun RecordDeleteActions(
+    isRestored: Boolean,
+    isBuilt: Boolean,
+    onDeleteRestoration: () -> Unit,
+    onDeleteBuild: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (isBuilt) {
+            DeleteRecordButton(
+                text = "刪除已創建紀錄",
+                onClick = onDeleteBuild
+            )
+        }
+        if (isRestored) {
+            DeleteRecordButton(
+                text = "刪除已修復紀錄",
+                onClick = onDeleteRestoration
+            )
+        }
+    }
+}
+
+@Composable
+private fun DeleteRecordButton(
+    text: String,
+    onClick: () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color.Transparent,
+            contentColor = Color(0xFFB5483B)
+        ),
+        elevation = null
+    ) {
+        Icon(Icons.Default.DeleteOutline, contentDescription = null)
+        Spacer(Modifier.padding(horizontal = 4.dp))
+        Text(text)
+    }
+}
+
+@Composable
+private fun DeleteRecordDialog(
+    target: DeleteTarget,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val deletingRestoration = target == DeleteTarget.RESTORATION
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                if (deletingRestoration) "刪除已修復紀錄？" else "刪除已創建紀錄？",
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Text(
+                if (deletingRestoration) {
+                    "舊照片會重新鎖定，已創建的 2.5D 建築也會一併移除。"
+                } else {
+                    "地圖上的 2.5D 建築會被移除，已解鎖的舊照片仍會保留。"
+                }
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB5483B))
+            ) {
+                Text("確認刪除")
+            }
+        },
+        dismissButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.Transparent,
+                    contentColor = TextGray
+                ),
+                elevation = null
+            ) {
+                Text("取消")
+            }
+        },
+        containerColor = Color(0xFFF8F3EB)
+    )
 }
 
 @Composable

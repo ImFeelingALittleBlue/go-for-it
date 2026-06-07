@@ -6,6 +6,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,6 +28,7 @@ import com.example.goforit.navigation.BottomNavBar
 import com.example.goforit.navigation.Screen
 import com.example.goforit.ui.account.AccountScreen
 import com.example.goforit.ui.collection.CollectionScreen
+import com.example.goforit.ui.common.SilverSaltHelpButton
 import com.example.goforit.ui.home.HomeScreen
 import com.example.goforit.ui.login.LoginScreen
 import com.example.goforit.ui.run.RunScreen
@@ -64,16 +69,17 @@ private fun MainApp() {
     var autoStartRunRequest by remember { mutableIntStateOf(0) }
 
     // Scaffold：Material3 的頁面框架，幫我們安排 bottomBar 的位置
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        bottomBar = { BottomNavBar(navController = navController) }
-    ) { innerPadding ->
-        // NavHost：根據目前 route 決定顯示哪個畫面
-        NavHost(
-            navController    = navController,
-            startDestination = Screen.Home.route,
-            modifier         = Modifier.padding(innerPadding)
-        ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            bottomBar = { BottomNavBar(navController = navController) }
+        ) { innerPadding ->
+            // NavHost：根據目前 route 決定顯示哪個畫面
+            NavHost(
+                navController    = navController,
+                startDestination = Screen.Home.route,
+                modifier         = Modifier.padding(innerPadding)
+            ) {
             composable(Screen.Home.route) {
                 HomeScreen(
                     onStartExplore = {
@@ -93,6 +99,14 @@ private fun MainApp() {
             }
             composable(Screen.Records.route) { CollectionScreen() }
             composable(Screen.Account.route) { AccountScreen() }
+            }
         }
+
+        SilverSaltHelpButton(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(top = 10.dp, end = 12.dp)
+        )
     }
 }
