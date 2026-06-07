@@ -33,11 +33,19 @@ import com.example.goforit.ui.home.HomeScreen
 import com.example.goforit.ui.login.LoginScreen
 import com.example.goforit.ui.run.RunScreen
 import com.example.goforit.ui.theme.GoForItTheme
+import com.google.android.libraries.places.api.Places
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val placesApiKey = getString(R.string.places_api_key)
+        if (!Places.isInitialized() && placesApiKey.isNotBlank()) {
+            Places.initializeWithNewPlacesApiEnabled(
+                applicationContext,
+                placesApiKey
+            )
+        }
         setContent {
             GoForItTheme {
                 // 觀察登入狀態：null 才是未登入；匿名帳號也算已登入（可訪客瀏覽）
