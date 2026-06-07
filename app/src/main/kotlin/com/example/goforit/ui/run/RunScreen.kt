@@ -22,6 +22,7 @@ import com.example.goforit.data.HeritageRepository
 import com.example.goforit.data.PendingRunStore
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.RouteRepository
+import com.example.goforit.data.SilverSaltStore
 import com.example.goforit.ui.applyWarmMapStyle
 import com.example.goforit.ui.home.OrangeAccent
 import com.example.goforit.ui.home.TextGray
@@ -63,6 +64,7 @@ private sealed class RunNav {
 // 跑步的兩個階段
 private enum class RunPhase { PRE_RUN, RUNNING, PAUSED }
 private const val HERITAGE_UNLOCK_RADIUS_METERS = 40.0
+private const val HERITAGE_UNLOCK_REWARD = 10   // 解鎖一個古蹟獲得的時光銀鹽
 
 @Composable
 fun RunScreen(
@@ -453,7 +455,6 @@ fun RunScreen(
             if (notifHeritage != null) {
                 HeritageUnlockCard(
                     heritage = notifHeritage!!,
-                    silverReward = HERITAGE_UNLOCK_REWARD,
                     onDismiss = { notifHeritage = null }
                 )
             } else {
