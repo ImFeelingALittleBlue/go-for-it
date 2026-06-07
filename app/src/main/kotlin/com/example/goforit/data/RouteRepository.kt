@@ -83,26 +83,31 @@ object RouteRepository {
         collection()?.document(docId)?.update("liked", liked)
     }
 
-    fun addRun(name: String, points: List<Point>, routeGpx: String = "") {
+    fun addRun(
+        name: String,
+        points: List<Point>,
+        routeGpx: String = "",
+        elapsedSeconds: Int = 0,
+        silverEarned: Int = 0,
+        unlockedCount: Int = 0
+    ) {
         val now = System.currentTimeMillis()
-        // 優先用原始 GPX（路線匯入跑步）；否則從 GPS 軌跡生成；都沒有則空白
         val gpx = when {
-            routeGpx.isNotBlank()  -> routeGpx
-            points.size >= 2       -> buildGpx(name, points, now)
-            else                   -> ""
+            routeGpx.isNotBlank() -> routeGpx
+            points.size >= 2      -> buildGpx(name, points, now)
+            else                  -> ""
         }
         val routePoints = points.map { RoutePoint(it.latitude(), it.longitude()) }
         val dist = if (routePoints.size >= 2)
             routePoints.zipWithNext().sumOf { (a, b) -> distanceMeters(a, b) }
         else 0.0
         val data = hashMapOf(
-            "name" to name,
-            "gpxFileName" to "run-$now.gpx",
-            "gpxContent" to gpx,
-            "distanceMeters" to dist,
-            "pointCount" to points.size,
-            "startedAt" to now,
-            "recordedAt" to now
+            "name" to name, "gpxFileName" to "run-$now.gpx", "gpxContent" to gpx,
+            "distanceMeters" to dist, "pointCount" to points.size,
+            "startedAt" to now, "recordedAt" to now,
+            "elapsedSeconds" to elapsedSeconds,
+            "silverEarned" to silverEarned,
+            "unlockedCount" to unlockedCount
         )
         collection()?.add(data)
     }

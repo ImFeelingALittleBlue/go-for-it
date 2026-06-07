@@ -71,7 +71,7 @@ private fun MainApp() {
         ) {
             composable(Screen.Home.route)    { HomeScreen() }
             composable(Screen.Run.route)     { RunScreen() }
-            composable(Screen.Records.route) { CollectionScreen() }
+            composable(Screen.Records.route) { CollectionScreen(navController) }
             composable(Screen.Account.route) { AccountScreen() }
         }
     }

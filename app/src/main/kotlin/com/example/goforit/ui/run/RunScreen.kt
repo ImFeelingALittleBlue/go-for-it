@@ -19,6 +19,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.example.goforit.data.Heritage
 import com.example.goforit.data.HeritageRepository
+import com.example.goforit.data.PendingRunStore
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.RouteRepository
 import com.example.goforit.data.SilverSaltStore
@@ -104,6 +105,18 @@ fun RunScreen() {
     }
 
     rememberLocationPermission { locationGranted = true }
+
+    // 偵測「再跑一次」請求：CollectionScreen 設置 PendingRunStore 後切換到此 tab
+    val hasPendingRun by PendingRunStore.hasPending
+    LaunchedEffect(hasPendingRun) {
+        if (hasPendingRun) {
+            val pts  = PendingRunStore.points
+            val gpx  = PendingRunStore.gpxContent
+            val dist = PendingRunStore.distanceKm
+            PendingRunStore.clear()
+            if (pts.isNotEmpty()) nav = RunNav.RoutePreview(pts, dist, gpx)
+        }
+    }
 
     DisposableEffect(lifecycleOwner) {
         val obs = object : DefaultLifecycleObserver {
@@ -259,7 +272,10 @@ fun RunScreen() {
                                     silverEarned      = unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD,
                                     routeName         = runName
                                 )
-                                RouteRepository.addRun(runName, pts)
+                                RouteRepository.addRun(runName, pts, "",
+                                    elapsedSeconds,
+                                    unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD,
+                                    unlockedDuringRun.size)
                                 tracker.stop()
                                 notifHeritage = null
                                 phase = RunPhase.PRE_RUN
@@ -434,7 +450,10 @@ fun RunScreen() {
                     silverEarned      = unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD,
                     routeName         = runName
                 )
-                RouteRepository.addRun(runName, tracker.points.toList(), selectedRouteGpx)
+                RouteRepository.addRun(runName, tracker.points.toList(), selectedRouteGpx,
+                    elapsedSeconds,
+                    unlockedDuringRun.size * HERITAGE_UNLOCK_REWARD,
+                    unlockedDuringRun.size)
                 tracker.stop()
                 selectedRoutePoints = emptyList()
                 selectedRouteGpx    = ""

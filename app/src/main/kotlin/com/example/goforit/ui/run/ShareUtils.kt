@@ -1,12 +1,18 @@
 package com.example.goforit.ui.run
 
+import android.app.Activity
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.Typeface
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
+import android.view.PixelCopy
 import com.mapbox.geojson.Point
 
 // 用 Android Canvas 手動畫出成就卡片，存為 PNG 回傳
@@ -75,6 +81,80 @@ fun createShareBitmap(
     }
     cvs.drawText("#GoForIt  #臺南古蹟跑步", 48f, 436f, brandPaint)
 
+    return bmp
+}
+
+// 用 PixelCopy（Android 8+）截取任意 View 的完整渲染畫面（含 OpenGL/硬體加速圖層）
+// onResult 傳回 Bitmap（成功）或 null（失敗/舊版裝置），呼叫端自行決定 fallback
+fun captureMapView(
+    activity: Activity,
+    mapView: android.view.View,
+    onResult: (Bitmap?) -> Unit
+) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+        mapView.width > 0 && mapView.height > 0) {
+        val bitmap = Bitmap.createBitmap(mapView.width, mapView.height, Bitmap.Config.ARGB_8888)
+        val loc = IntArray(2); mapView.getLocationInWindow(loc)
+        PixelCopy.request(
+            activity.window,
+            Rect(loc[0], loc[1], loc[0] + mapView.width, loc[1] + mapView.height),
+            bitmap,
+            { result -> onResult(if (result == PixelCopy.SUCCESS) bitmap else null) },
+            Handler(Looper.getMainLooper())
+        )
+    } else {
+        onResult(null)   // 舊版裝置或 View 尚未 layout → 由呼叫端 fallback
+    }
+}
+
+// 把路線點畫成分享圖片：米色背景 + 橘色折線 + 起終點圓圈 + 浮水印
+fun createRouteShareBitmap(routePoints: List<Point>): Bitmap {
+    val w = 900; val h = 480
+    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val cvs = Canvas(bmp)
+    cvs.drawColor(android.graphics.Color.parseColor("#F5F0EB"))  // 米色背景
+
+    if (routePoints.size >= 2) {
+        val lats = routePoints.map { it.latitude() }
+        val lngs = routePoints.map { it.longitude() }
+        val minLat = lats.min(); val maxLat = lats.max()
+        val minLng = lngs.min(); val maxLng = lngs.max()
+        val latSpan = maxOf(maxLat - minLat, 0.001)
+        val lngSpan = maxOf(maxLng - minLng, 0.001)
+        val pad = 72f
+        // 經緯度轉畫布座標（緯度軸反轉）
+        fun toX(lng: Double) = (pad + (lng - minLng) / lngSpan * (w - 2 * pad)).toFloat()
+        fun toY(lat: Double) = (h - pad - (lat - minLat) / latSpan * (h - 2 * pad)).toFloat()
+
+        // 橘色路線
+        val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#D4822A")
+            strokeWidth = 9f; style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
+        }
+        val path = android.graphics.Path()
+        routePoints.forEachIndexed { i, pt ->
+            val x = toX(pt.longitude()); val y = toY(pt.latitude())
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        cvs.drawPath(path, linePaint)
+
+        // 起終點圓圈（橘底白邊）
+        val fillPaint   = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.parseColor("#D4822A") }
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.WHITE; strokeWidth = 4f; style = Paint.Style.STROKE
+        }
+        listOf(routePoints.first(), routePoints.last()).forEach { pt ->
+            cvs.drawCircle(toX(pt.longitude()), toY(pt.latitude()), 14f, fillPaint)
+            cvs.drawCircle(toX(pt.longitude()), toY(pt.latitude()), 14f, borderPaint)
+        }
+    }
+
+    // 品牌浮水印
+    val brandPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.parseColor("#C8B8A0"); textSize = 26f
+    }
+    cvs.drawText("Go For It · 臺南古蹟跑步", 24f, (h - 18).toFloat(), brandPaint)
     return bmp
 }
 
