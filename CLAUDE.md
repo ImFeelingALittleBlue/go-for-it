@@ -45,10 +45,11 @@ Figma 設計稿：https://www.figma.com/design/DvrclsHl9R2hLEpDAoHhdk/Untitled?n
 - **Mapbox Downloads Token**（`sk.` 開頭）：`local.properties` → `MAPBOX_DOWNLOADS_TOKEN`
 - **Mapbox Public Token**（`pk.` 開頭）：`local.properties` → `MAPBOX_PUBLIC_TOKEN`（build.gradle.kts 透過 `resValue` 注入，不寫死在 strings.xml）
 - **Firebase 設定**：`app/google-services.json`（不提交 git）
+- **Anthropic API Key**：`local.properties` → `ANTHROPIC_API_KEY`（build.gradle.kts 透過 `buildConfigField` 注入為 `BuildConfig.ANTHROPIC_API_KEY`）
 
 > ⚠️ `local.properties` 已加入 `.gitignore`，協作者須自行建立（見 Readme.md）
 
-## 目前狀態（2026-06-06）
+## 目前狀態（2026-06-14）
 - [x] 專案 Gradle 架構建立完成
 - [x] 所有依賴設定完成（Compose、Room、Mapbox、Firebase、Media3）
 - [x] Mapbox 兩個金鑰已設定（存於 local.properties，不進 git）
@@ -69,9 +70,16 @@ Figma 設計稿：https://www.figma.com/design/DvrclsHl9R2hLEpDAoHhdk/Untitled?n
 - [x] GPX 原始內容隨紀錄存進 Firestore，按愛心後不需重新上傳即可再次選路線跑步
 - [x] **紀錄詳情頁**（`RecordDetailScreen.kt`）：地圖折線 + 統計 + 再跑一次（PendingRunStore）+ 分享
 - [x] **分享底頁**（`ShareSheet.kt`）：Mapbox Snapshotter 截圖（含真實地圖底圖）+ 儲存圖片 + AI Podcast 佔位
+- [x] **Podcast 卡片 UI 重設計**（`RouteRunningPanel.kt`）：垂直古蹟列表、可捲動（LazyColumn）、播放中高亮、點卡片重播、⏸ 暫停鍵
+- [x] **Podcast 自動依序播放**：進入路線跑步立刻播第一站，播完自動播下一站，使用者暫停才停
+- [x] **規劃路線限定點選古蹟**（`RoutePlanScreen.kt`）：地圖只能點 80m 內的古蹟標點，空白處忽略
+- [x] **地圖古蹟名稱提示框**（`HeritageTooltip.kt`）：點選古蹟標點浮出名稱小標籤，2 秒自動消失（`RoutePlanScreen`、`RunScreen`）
+- [x] **Claude API Podcast 生成**（`PodcastGenerator.kt`）：呼叫 `claude-haiku-4-5` 生成客製化兩人對話腳本，風格像《故事 FM》直切故事核心
+- [x] **預生成快取**（`PodcastCache.kt`）：「開始跑步」前先 call API 存快取，進場即刻播放零等待；WAV 下載與跑步播放使用同一份腳本
+- [x] **Podcast 時長輸入改為自由輸入分鐘數**（`StoryState.kt`）：輸入總時長，系統自動除以古蹟數分攤每站
+- [x] Anthropic API Key 從 `local.properties` 讀入，透過 `BuildConfig.ANTHROPIC_API_KEY` 注入
 - [ ] Room DB：從 metadata.csv 匯入古蹟資料
 - [ ] 古蹟觸發：進入 40m 範圍自動播放語音
-- [ ] AI 語音導覽：Firebase Functions + Claude API 生成旁白
 - [ ] 時光銀鹽積分 + 老照片兌換
 - [ ] 使用者登入（Firebase Auth）
 
@@ -91,18 +99,25 @@ app/src/main/kotlin/com/example/goforit/
     │   ├── HeritageSection.kt         ← 附近古蹟列表區塊
     │   └── LocationPermission.kt      ← GPS 權限請求邏輯
     ├── run/
-    │   ├── RunScreen.kt               ← 去探索主畫面（地圖 + 計時 + 軌跡）
+    │   ├── RunScreen.kt               ← 去探索主畫面（地圖 + 計時 + 軌跡 + 古蹟tooltip）
     │   ├── RunTracker.kt              ← GPS 軌跡記錄（LocationManager）
     │   ├── RunningOverlay.kt          ← 跑步中共用元件（統計列、解鎖通知、對話框）
-    │   ├── RouteRunningPanel.kt       ← 選擇路線跑步中的頂部/底部面板
+    │   ├── RouteRunningPanel.kt       ← 選擇路線跑步中的頂部/底部面板（Podcast卡片列表）
+    │   ├── RoutePlanScreen.kt         ← 規劃路線（只能點選古蹟標點 + tooltip 2秒消失）
     │   ├── RunSummaryScreen.kt        ← 跑步結算頁（地圖 + 統計 + 命名 + 分享）
     │   ├── RecordDetailScreen.kt      ← 紀錄詳情頁（從紀錄頁點入，含地圖+統計+再跑一次）
-    │   ├── ShareSheet.kt              ← 分享底頁（Mapbox Snapshotter 截圖 + Podcast 佔位）
+    │   ├── ShareSheet.kt              ← 分享底頁（Mapbox Snapshotter 截圖 + 下載WAV）
     │   ├── MapSnapshot.kt             ← Mapbox Snapshotter 工具（生成含底圖的路線圖片）
     │   ├── ShareUtils.kt              ← 分享工具（Canvas 路線圖、存相簿、存 GPX）
+    │   ├── HeritageTooltip.kt         ← 古蹟名稱提示框（點選地圖標點 → 2秒後自動消失）
+    │   ├── PodcastPlayer.kt           ← TTS 播放器（快取優先 → API → 模板 fallback）
+    │   ├── PodcastGenerator.kt        ← Claude API 生成 Podcast 腳本（Haiku 模型）
+    │   ├── PodcastCache.kt            ← 預生成快取（開始跑步前存好，跑步中即刻播放）
+    │   ├── PodcastExporter.kt         ← TTS → WAV 匯出（使用快取腳本）
+    │   ├── StoryState.kt              ← Podcast 時長狀態（整段時長 ÷ 古蹟數）
     │   ├── SavedRoutesScreen.kt       ← 已儲存路線（愛心收藏清單 + GPX 上傳）
     │   ├── GpxParser.kt               ← GPX 解析（XmlPullParser + Haversine）
-    │   └── RoutePreviewScreen.kt      ← 路線預覽 + 開始跑步
+    │   └── RoutePreviewScreen.kt      ← 路線預覽 + 開始跑步（預生成 Podcast 腳本）
     ├── collection/
     │   └── CollectionScreen.kt        ← 紀錄頁（跑步紀錄 + 愛心 + 刪除）
     ├── map/

@@ -46,6 +46,7 @@ fun RunSummaryScreen(
     unlockedHeritages: List<Heritage>,
     silverEarned: Int,
     initialRouteName: String,
+    podcastHeritages: List<Heritage> = emptyList(), // 規劃模式傳入選取的古蹟，其他情況留空
     onFinish: () -> Unit
 ) {
     val context        = LocalContext.current
@@ -58,11 +59,14 @@ fun RunSummaryScreen(
     var showRenameDialog by remember { mutableStateOf(false) }
     var editingName      by remember { mutableStateOf("") }
 
-    // 路線古蹟：有 GPX 路線時用路線算，直接跑步時用解鎖古蹟代替
     val allHeritages   = remember { HeritageRepository.loadHeritages(context) }
-    val routeHeritages = remember(routePoints) {
-        if (routePoints.isNotEmpty()) heritagesOnRoute(routePoints, allHeritages).map { it.first }
-        else unlockedHeritages
+    // 優先順序：規劃模式選取的古蹟 > GPX路線 200m 內的古蹟 > 本次解鎖的古蹟（直接跑步）
+    val routeHeritages = remember(routePoints, podcastHeritages) {
+        when {
+            podcastHeritages.isNotEmpty() -> podcastHeritages
+            routePoints.isNotEmpty()      -> heritagesOnRoute(routePoints, allHeritages).map { it.first }
+            else                          -> unlockedHeritages
+        }
     }
     val region  = remember(trackPoints, routePoints) { detectRegion(trackPoints.ifEmpty { routePoints }) }
     val dateStr = remember { SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()).format(Date()) }
@@ -230,6 +234,7 @@ private fun SummaryPodcastCard(routeName: String, routeHeritages: List<Heritage>
     var exportDone     by remember { mutableStateOf(false) }
     var exportFailed   by remember { mutableStateOf(false) }
     var exportProgress by remember { mutableStateOf(0 to 0) }
+    var podcastDuration by remember { mutableIntStateOf(8) }
 
     Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         shape = RoundedCornerShape(12.dp), color = Color(0xFF2C2218)) {
@@ -259,12 +264,13 @@ private fun SummaryPodcastCard(routeName: String, routeHeritages: List<Heritage>
                         fontSize = 12.sp, color = Color(0xFF9E8E7A))
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(10.dp))
             Button(
                 onClick = {
                     if (!isExporting && !exportDone && routeHeritages.isNotEmpty()) {
                         isExporting = true; exportFailed = false
-                        exportPodcastToWav(context, routeName, routeHeritages,
+                        exportPodcastToWav(context, routeName, routeHeritages, podcastDuration,  // Int minutes
                             onProgress = { cur, total -> exportProgress = cur to total },
                             onComplete = { ok -> isExporting = false
                                 if (ok) exportDone = true else exportFailed = true })

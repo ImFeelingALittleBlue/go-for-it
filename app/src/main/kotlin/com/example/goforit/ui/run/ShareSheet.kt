@@ -28,12 +28,12 @@ fun ShareBottomSheet(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    var imgSaved      by remember { mutableStateOf(false) }
-    var isExporting   by remember { mutableStateOf(false) }
-    var exportDone    by remember { mutableStateOf(false) }
-    var exportFailed  by remember { mutableStateOf(false) }
-    // 合成進度（current, total 行數）
+    var imgSaved       by remember { mutableStateOf(false) }
+    var isExporting    by remember { mutableStateOf(false) }
+    var exportDone     by remember { mutableStateOf(false) }
+    var exportFailed   by remember { mutableStateOf(false) }
     var exportProgress by remember { mutableStateOf(0 to 0) }
+    var podcastDuration by remember { mutableIntStateOf(8) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -125,6 +125,7 @@ fun ShareBottomSheet(
                             context    = context,
                             routeName  = routeName,
                             heritages  = routeHeritages,
+                            minutes    = podcastDuration,
                             onProgress = { cur, total -> exportProgress = cur to total },
                             onComplete = { success ->
                                 isExporting = false

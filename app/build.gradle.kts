@@ -33,6 +33,10 @@ android {
             localProps.getProperty("PLACES_API_KEY", legacyGoogleMapsApiKey))
         resValue("string", "street_view_api_key",
             localProps.getProperty("STREET_VIEW_API_KEY", legacyGoogleMapsApiKey))
+        // Anthropic API key（讀自 local.properties，不進 git）
+        buildConfigField("String", "ANTHROPIC_API_KEY",
+            "\"${localProps.getProperty("ANTHROPIC_API_KEY", "")}\"")
+
     }
 
     buildTypes {
@@ -56,6 +60,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true   // 讓 BuildConfig.ANTHROPIC_API_KEY 可以在程式碼裡讀取
     }
 
     packaging {

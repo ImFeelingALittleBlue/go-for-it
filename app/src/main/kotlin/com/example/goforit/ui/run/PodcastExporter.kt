@@ -18,12 +18,16 @@ fun exportPodcastToWav(
     context: Context,
     routeName: String,
     heritages: List<Heritage>,
+    minutes: Int = 8,
     onProgress: (Int, Int) -> Unit,
     onComplete: (Boolean) -> Unit
 ) {
     val mainHandler = Handler(Looper.getMainLooper())
-    // 展開全部古蹟的對話行（4行/古蹟）
-    val lines = heritages.flatMap { generateDialogue(it) }
+    // 優先用快取（與跑步中播放的相同腳本），沒有快取才用模板
+    val minPerStop = (minutes / heritages.size.coerceAtLeast(1)).coerceAtLeast(1)
+    val lines = heritages.flatMap { h ->
+        PodcastCache.get(h.id) ?: generateDialogue(h, minPerStop)
+    }
     if (lines.isEmpty()) { mainHandler.post { onComplete(false) }; return }
 
     val tempDir   = context.cacheDir
