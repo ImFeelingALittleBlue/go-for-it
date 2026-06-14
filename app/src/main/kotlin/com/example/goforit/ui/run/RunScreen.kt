@@ -42,6 +42,7 @@ import com.mapbox.maps.plugin.annotation.generated.PolylineAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.PolylineAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.createCircleAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.createPolylineAnnotationManager
+import com.mapbox.maps.plugin.gestures.addOnMapClickListener
 import com.mapbox.maps.plugin.locationcomponent.location
 import kotlinx.coroutines.delay
 import kotlin.math.atan2
@@ -54,7 +55,8 @@ import kotlin.math.sqrt
 private sealed class RunNav {
     object Main        : RunNav()
     object SavedRoutes : RunNav()
-    data class RoutePreview(val points: List<Point>, val distanceKm: Float, val gpxContent: String = "") : RunNav()
+    data class RoutePreview(val points: List<Point>, val distanceKm: Float, val gpxContent: String = "", val fromPlan: Boolean = false, val routePlanHeritages: List<Heritage> = emptyList()) : RunNav()
+    object RoutePlan       : RunNav()
     data class Summary(
         val trackPoints: List<Point>,
         val routePoints: List<Point>,
@@ -62,7 +64,8 @@ private sealed class RunNav {
         val elapsedSeconds: Int,
         val unlockedHeritages: List<Heritage>,
         val silverEarned: Int,
-        val routeName: String             // 與存進 Firestore 的名稱一致
+        val routeName: String,
+        val podcastHeritages: List<Heritage> = emptyList()  // 規劃模式的 5 個選取古蹟
     ) : RunNav()
 }
 
@@ -116,6 +119,14 @@ fun RunScreen(
         nearestHeritage?.let { h -> distanceMeters(from.latitude(), from.longitude(), h.lat, h.lng).toFloat() } ?: 999f
     }
     var consumedAutoStartRequest by remember { mutableIntStateOf(0) }
+    var podcastDuration    by remember { mutableIntStateOf(8) }   // 每個古蹟播幾分鐘，預設 8
+    var planHeritages      by remember { mutableStateOf<List<Heritage>>(emptyList()) }
+    var podcastAutoPlay    by remember { mutableStateOf(false) }  // 路線模式：自動依序播放
+    var podcastAutoTrigger by remember { mutableIntStateOf(0) }   // 遞增觸發起始播放
+    // 地圖上古蹟點被點選時浮出的名稱提示框
+    var tooltipHeritage    by remember { mutableStateOf<Heritage?>(null) }
+    var tooltipX           by remember { mutableStateOf(0f) }
+    var tooltipY           by remember { mutableStateOf(0f) }
 
     // 計步器：記錄開始跑步時的累計步數，結束時相減得到本次步數
     // TYPE_STEP_COUNTER 從手機開機後持續累計，不會重設
@@ -138,6 +149,7 @@ fun RunScreen(
     val podcastPlayer = remember {
         DefaultPodcastPlayer(
             context = context,
+            apiKey  = com.example.goforit.BuildConfig.ANTHROPIC_API_KEY,
             onPlaybackStarted = { heritageId ->
                 activePodcastHeritage = heritages.firstOrNull { it.id == heritageId }
             },
@@ -155,7 +167,7 @@ fun RunScreen(
             },
             onPlaybackFailed = { heritageId ->
                 activePodcastHeritage = null
-                podcastRequestedDuringRun.remove(heritageId)
+                // 不移除已請求清單：自動播放模式不重試失敗項目，使用者可點卡片手動重播
             },
             onLineChanged = { line -> activeLine = line }
         )
@@ -195,10 +207,13 @@ fun RunScreen(
             phase == RunPhase.PRE_RUN
         ) {
             consumedAutoStartRequest = autoStartRequest
+            selectedRoutePoints = emptyList()
+            planHeritages       = emptyList()
+            podcastDuration     = 8
+            podcastAutoPlay     = false
             elapsedSeconds = 0
             unlockedDuringRun.clear()
             podcastRequestedDuringRun.clear()
-            selectedRoutePoints = emptyList()
             tracker.start()
             phase = RunPhase.RUNNING
         }
@@ -238,31 +253,57 @@ fun RunScreen(
         }
     }
 
+    // 古蹟名稱提示框 2 秒後自動消失
+    LaunchedEffect(tooltipHeritage) {
+        if (tooltipHeritage != null) {
+            delay(2_000L)
+            tooltipHeritage = null
+        }
+    }
+
+    // 直接跑步：GPS 進入 40m 範圍才觸發 Podcast（路線模式改用自動播放）
     LaunchedEffect(pointCount, phase) {
         if (phase != RunPhase.RUNNING || pointCount == 0) return@LaunchedEffect
+        if (podcastAutoPlay) return@LaunchedEffect   // 路線/規劃模式由下方 LaunchedEffect 自動排序播放
         val latest = tracker.points.last()
-        // 路線模式只掃路線上的古蹟；直接跑步掃全部
-        val candidates = if (selectedRoutePoints.isNotEmpty())
-            heritagesOnRoute(selectedRoutePoints, heritages).map { it.first }
-        else
-            heritages
-        candidates
-            .filter {
-                !RestorationRepository.isRestored(it.id) &&
-                    it.id !in podcastRequestedDuringRun
+        heritages
+            .filter { !RestorationRepository.isRestored(it.id) && it.id !in podcastRequestedDuringRun }
+            .firstOrNull { h -> distanceMeters(latest.latitude(), latest.longitude(), h.lat, h.lng) <= HERITAGE_UNLOCK_RADIUS_METERS }
+            ?.let { h ->
+                podcastRequestedDuringRun.add(h.id)
+                podcastPlayer.play(h, podcastDuration)
             }
-            .firstOrNull { heritage ->
-                distanceMeters(
-                    latest.latitude(),
-                    latest.longitude(),
-                    heritage.lat,
-                    heritage.lng
-                ) <= HERITAGE_UNLOCK_RADIUS_METERS
-            }
-            ?.let { heritage ->
-                podcastRequestedDuringRun.add(heritage.id)
-                podcastPlayer.play(heritage)
-            }
+    }
+
+    // 路線/規劃模式：進入跑步立刻播第一站
+    LaunchedEffect(podcastAutoTrigger) {
+        if (podcastAutoTrigger == 0) return@LaunchedEffect
+        delay(400L)
+        val queue = if (planHeritages.isNotEmpty()) planHeritages
+                    else heritagesOnRoute(selectedRoutePoints, heritages).map { it.first }
+        val minPerStop = (podcastDuration / queue.size.coerceAtLeast(1)).coerceAtLeast(1)
+        queue.firstOrNull()?.let { first ->
+            podcastRequestedDuringRun.add(first.id)
+            activePodcastHeritage = first   // 先標記，讓 UI 顯示「生成中」
+            podcastPlayer.play(first, minPerStop)
+        }
+    }
+
+    // 路線/規劃模式：每首播完自動播下一站（使用者暫停時 podcastAutoPlay = false）
+    LaunchedEffect(activePodcastHeritage) {
+        if (activePodcastHeritage != null) return@LaunchedEffect
+        if (!podcastAutoPlay || phase != RunPhase.RUNNING) return@LaunchedEffect
+        if (podcastRequestedDuringRun.isEmpty()) return@LaunchedEffect
+        delay(800L)
+        val queue = if (planHeritages.isNotEmpty()) planHeritages
+                    else heritagesOnRoute(selectedRoutePoints, heritages).map { it.first }
+        val minPerStop = (podcastDuration / queue.size.coerceAtLeast(1)).coerceAtLeast(1)
+        val next = queue.firstOrNull { it.id !in podcastRequestedDuringRun }
+        next?.let {
+            podcastRequestedDuringRun.add(it.id)
+            activePodcastHeritage = it      // 先標記，讓 UI 顯示「生成中」
+            podcastPlayer.play(it, minPerStop)
+        }
     }
 
     // ── 子畫面路由 ────────────────────────────────────────────────────────
@@ -274,34 +315,48 @@ fun RunScreen(
             )
             return
         }
+        is RunNav.RoutePlan -> {
+            RoutePlanScreen(
+                onBack      = { nav = RunNav.Main },
+                onRouteDone = { pts, dist, hs -> nav = RunNav.RoutePreview(pts, dist, fromPlan = true, routePlanHeritages = hs) }
+            )
+            return
+        }
         is RunNav.RoutePreview -> {
             RoutePreviewScreen(
-                points = n.points,
-                distanceKm = n.distanceKm,
-                onBack = { nav = RunNav.SavedRoutes },
-                onStartRun = {
-                    selectedRoutePoints = n.points      // 保存 GPX 路線供地圖顯示
-                    selectedRouteGpx    = n.gpxContent  // 保存原始 GPX，跑完存進紀錄
+                points        = n.points,
+                distanceKm    = n.distanceKm,
+                planHeritages = n.routePlanHeritages,
+                onBack        = { nav = if (n.fromPlan) RunNav.Main else RunNav.SavedRoutes },
+                onStartRun    = { duration ->
+                    selectedRoutePoints = n.points
+                    selectedRouteGpx    = n.gpxContent
+                    podcastDuration     = duration
+                    // 規劃模式：直接使用 RoutePlanScreen 吸附確認的古蹟清單，不再重算距離
+                    planHeritages = n.routePlanHeritages
+                    podcastAutoPlay = true
                     elapsedSeconds = 0
                     unlockedDuringRun.clear()
                     podcastRequestedDuringRun.clear()
                     if (locationGranted) tracker.start()
                     phase = RunPhase.RUNNING
                     nav = RunNav.Main
+                    podcastAutoTrigger++   // 觸發 LaunchedEffect 播放第一站
                 }
             )
             return
         }
         is RunNav.Summary -> {
             RunSummaryScreen(
-                trackPoints      = n.trackPoints,
-                routePoints      = n.routePoints,
-                coveredKm        = n.coveredKm,
-                elapsedSeconds   = n.elapsedSeconds,
+                trackPoints       = n.trackPoints,
+                routePoints       = n.routePoints,
+                coveredKm         = n.coveredKm,
+                elapsedSeconds    = n.elapsedSeconds,
                 unlockedHeritages = n.unlockedHeritages,
-                silverEarned     = n.silverEarned,
-                initialRouteName = n.routeName,
-                onFinish         = { nav = RunNav.Main }
+                silverEarned      = n.silverEarned,
+                initialRouteName  = n.routeName,
+                podcastHeritages  = n.podcastHeritages,
+                onFinish          = { nav = RunNav.Main }
             )
             return
         }
@@ -413,6 +468,23 @@ fun RunScreen(
                             // routeLineManager 先建（在下層）→ polylineManager 在上層蓋 GPS 軌跡
                             routeLineManager = annotations.createPolylineAnnotationManager()
                             polylineManager  = annotations.createPolylineAnnotationManager()
+                            // 點擊地圖：偵測 80m 內最近的古蹟，顯示名稱提示框
+                            mapboxMap.addOnMapClickListener { tapped ->
+                                val near = heritages.minByOrNull { h ->
+                                    distanceMeters(tapped.latitude(), tapped.longitude(), h.lat, h.lng)
+                                }?.takeIf { h ->
+                                    distanceMeters(tapped.latitude(), tapped.longitude(), h.lat, h.lng) <= 80.0
+                                }
+                                if (near != null) {
+                                    val px = mapboxMap.pixelForCoordinate(Point.fromLngLat(near.lng, near.lat))
+                                    tooltipX = px.x.toFloat()
+                                    tooltipY = px.y.toFloat()
+                                    tooltipHeritage = near
+                                } else {
+                                    tooltipHeritage = null
+                                }
+                                false  // 不攔截事件，保留地圖手勢
+                            }
                         }
                     }
                 },
@@ -441,37 +513,51 @@ fun RunScreen(
             )
 
             if (phase == RunPhase.PRE_RUN) {
-                Row(
+                Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .background(Color.White.copy(alpha = 0.95f))
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedButton(
-                        onClick = { nav = RunNav.SavedRoutes },
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(24.dp),
-                        border = BorderStroke(1.5.dp, OrangeAccent)
-                    ) {
-                        Text("選擇路線", color = OrangeAccent, fontWeight = FontWeight.SemiBold)
-                    }
                     Button(
                         onClick = {
-                            showStopDialog = false        // 清掉可能殘留的路線跑步 dialog 狀態
-                            selectedRoutePoints = emptyList() // 確保直接開始不帶著舊路線
+                            showStopDialog      = false
+                            selectedRoutePoints = emptyList()
+                            planHeritages       = emptyList()
+                            podcastDuration     = 8
+                            podcastAutoPlay     = false
                             elapsedSeconds = 0
                             unlockedDuringRun.clear()
                             podcastRequestedDuringRun.clear()
                             if (locationGranted) tracker.start()
                             phase = RunPhase.RUNNING
                         },
-                        modifier = Modifier.weight(1f).height(48.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
                         shape = RoundedCornerShape(24.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)
                     ) {
                         Text("直接開始", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(
+                            onClick = { nav = RunNav.SavedRoutes },
+                            modifier = Modifier.weight(1f).height(44.dp),
+                            shape = RoundedCornerShape(24.dp),
+                            border = BorderStroke(1.5.dp, OrangeAccent)
+                        ) {
+                            Text("選擇路線", color = OrangeAccent, fontSize = 14.sp)
+                        }
+                        OutlinedButton(
+                            onClick = { nav = RunNav.RoutePlan },
+                            modifier = Modifier.weight(1f).height(44.dp),
+                            shape = RoundedCornerShape(24.dp),
+                            border = BorderStroke(1.5.dp, OrangeAccent)
+                        ) {
+                            Text("規劃路線", color = OrangeAccent, fontSize = 14.sp)
+                        }
                     }
                 }
             } else if (selectedRoutePoints.isNotEmpty()) {
@@ -486,6 +572,11 @@ fun RunScreen(
                 }
             }
             // 直接跑步：地圖內無 overlay
+            // 古蹟名稱浮動提示框：點擊地圖上的古蹟點後出現，點其他地方消失
+            tooltipHeritage?.let { h ->
+                HeritageNameTooltip(name = h.name, x = tooltipX, y = tooltipY,
+                    onDismiss = { tooltipHeritage = null })
+            }
         }
 
         // ── 路線跑步底部面板（地圖下方：Podcast + 最近古蹟 + 按鈕）─────────
@@ -493,11 +584,26 @@ fun RunScreen(
             RouteRunningBottomPanel(
                 routePoints           = selectedRoutePoints,
                 heritages             = heritages,
+                planHeritages         = planHeritages,
                 nearestHeritage       = nearestHeritage,
                 distanceToNearestM    = distanceToNearestM,
                 unlockedIds           = restoredIds + unlockedDuringRun.toSet(),
+                playedIds             = podcastRequestedDuringRun.toSet(),
                 activePodcastHeritage = activePodcastHeritage,
                 activeLine            = activeLine,
+                onPlayHeritage        = { h ->
+                    podcastRequestedDuringRun.remove(h.id)
+                    podcastAutoPlay = true
+                    val queue = if (planHeritages.isNotEmpty()) planHeritages
+                                else heritagesOnRoute(selectedRoutePoints, heritages).map { it.first }
+                    val minPerStop = (podcastDuration / queue.size.coerceAtLeast(1)).coerceAtLeast(1)
+                    podcastPlayer.play(h, minPerStop)
+                },
+                onPausePodcast        = {
+                    podcastPlayer.stop()
+                    activePodcastHeritage = null
+                    podcastAutoPlay = false  // 使用者暫停，不再自動播下一首
+                },
                 onPause               = { showStopDialog = true },
                 onStop                = { showStopDialog = true }
             )
@@ -536,15 +642,16 @@ fun RunScreen(
         // ── [測試用] 手動觸發 Podcast 播放，確認 TTS 正常後可刪除 ────────────
         if (phase == RunPhase.RUNNING) {
             // 路線模式取路線第一個古蹟；直接模式取最近古蹟
-            val testTarget = if (selectedRoutePoints.isNotEmpty())
-                heritagesOnRoute(selectedRoutePoints, heritages).firstOrNull()?.first
-            else
-                nearestHeritage ?: heritages.firstOrNull()
+            val testTarget = when {
+                planHeritages.isNotEmpty()       -> planHeritages.firstOrNull { it.id !in podcastRequestedDuringRun } ?: planHeritages.firstOrNull()
+                selectedRoutePoints.isNotEmpty() -> heritagesOnRoute(selectedRoutePoints, heritages).firstOrNull()?.first
+                else                             -> nearestHeritage ?: heritages.firstOrNull()
+            }
             TextButton(
                 onClick = {
                     testTarget?.let {
                         podcastRequestedDuringRun.remove(it.id)
-                        podcastPlayer.play(it)
+                        podcastPlayer.play(it, podcastDuration)
                     }
                 },
                 modifier = Modifier.fillMaxWidth().background(Color(0xFFFAF5EF))
@@ -574,12 +681,14 @@ fun RunScreen(
                     elapsedSeconds    = elapsedSeconds,
                     unlockedHeritages = heritages.filter { it.id in unlockedDuringRun },
                     silverEarned      = silver,
-                    routeName         = runName
+                    routeName         = runName,
+                    podcastHeritages  = planHeritages.toList()
                 )
                 RouteRepository.addRun(runName, tracker.points.toList(), selectedRouteGpx,
                     elapsedSeconds, silver, unlockedDuringRun.size)
                 tracker.stop()
                 podcastPlayer.stop()
+                podcastAutoPlay     = false
                 selectedRoutePoints = emptyList()
                 selectedRouteGpx    = ""
                 notifHeritage = null
