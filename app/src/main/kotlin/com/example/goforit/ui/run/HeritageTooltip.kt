@@ -10,13 +10,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.goforit.ui.home.OrangeAccent
 
 // 地圖上點選古蹟時浮出的小名稱標籤，定位在古蹟點正上方
-// x, y 來自 mapboxMap.pixelForCoordinate()（邏輯像素，即 dp）
+// x, y 來自 mapboxMap.pixelForCoordinate()，回傳實體像素（px）
+// 必須先換算成 dp 才能給 absoluteOffset 使用
 @Composable
 fun HeritageNameTooltip(
     name: String,
@@ -24,9 +26,12 @@ fun HeritageNameTooltip(
     y: Float,
     onDismiss: () -> Unit
 ) {
+    val density = LocalDensity.current
+    val xDp = with(density) { x.toDp() }
+    val yDp = with(density) { y.toDp() }
     Surface(
         modifier = Modifier
-            .absoluteOffset(x = (x - 60).dp, y = (y - 48).dp)
+            .absoluteOffset(x = xDp - 60.dp, y = yDp - 48.dp)
             .clickable(onClick = onDismiss),
         shape = RoundedCornerShape(8.dp),
         color = Color.White,

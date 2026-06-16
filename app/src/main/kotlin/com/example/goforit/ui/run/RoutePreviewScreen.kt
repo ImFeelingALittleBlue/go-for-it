@@ -31,9 +31,7 @@ import com.mapbox.maps.Style
 import com.mapbox.maps.plugin.annotation.annotations
 import com.mapbox.maps.plugin.annotation.generated.PolylineAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.createPolylineAnnotationManager
-import kotlinx.coroutines.launch
-
-// 路線預覽畫面：顯示路線地圖 + AI Podcast 生成入口，按下「開始跑步」前先預生成腳本
+// 路線預覽畫面：顯示路線地圖 + AI Podcast 生成入口（選配），可直接按「開始跑步」
 @Composable
 fun RoutePreviewScreen(
     points: List<Point>,
@@ -45,13 +43,10 @@ fun RoutePreviewScreen(
     val context        = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val mapView        = remember { MapView(context) }
-    val scope          = rememberCoroutineScope()
     val allHeritages   = remember { HeritageRepository.loadHeritages(context) }
 
-    var storyState      by remember { mutableStateOf(StoryState.IDLE) }
-    var podcastMinutes  by remember { mutableIntStateOf(8) }
-    var isPreGenerating by remember { mutableStateOf(false) }   // 「開始跑步」前的生成進度
-    var preGenDone      by remember { mutableStateOf(0) }       // 已完成幾個古蹟
+    var storyState     by remember { mutableStateOf(StoryState.IDLE) }
+    var podcastMinutes by remember { mutableIntStateOf(8) }
 
     // 要生成腳本的古蹟清單：規劃模式直接用，GPX 模式從路線 200m 範圍推算
     val heritagesForGen = remember(points, planHeritages) {
@@ -150,47 +145,12 @@ fun RoutePreviewScreen(
                 Text("先儲存", fontSize = 14.sp)
             }
             Button(
-                onClick = {
-                    if (isPreGenerating) return@Button
-                    // 若快取已完整（StoryCard 已生成過），直接開始跑步
-                    if (PodcastCache.hasAll(heritagesForGen.map { it.id })) {
-                        onStartRun(podcastMinutes); return@Button
-                    }
-                    // 否則先預生成所有古蹟腳本再進入跑步
-                    isPreGenerating = true
-                    preGenDone = 0
-                    scope.launch {
-                        PodcastCache.clear()
-                        val apiKey = BuildConfig.ANTHROPIC_API_KEY
-                        val minPerStop = (podcastMinutes / heritagesForGen.size.coerceAtLeast(1)).coerceAtLeast(1)
-                        heritagesForGen.forEach { h ->
-                            val lines = if (apiKey.isNotBlank()) {
-                                try { generateDialogueFromApi(h, minPerStop, apiKey) }
-                                catch (_: Exception) { generateDialogue(h, minPerStop) }
-                            } else { generateDialogue(h, minPerStop) }
-                            PodcastCache.store(h.id, lines)
-                            preGenDone++
-                        }
-                        isPreGenerating = false
-                        onStartRun(podcastMinutes)
-                    }
-                },
-                enabled = !isPreGenerating,
+                onClick = { onStartRun(podcastMinutes) },
                 modifier = Modifier.weight(1f).height(48.dp),
                 shape = RoundedCornerShape(24.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)
             ) {
-                if (isPreGenerating) {
-                    Row(verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp, color = Color.White)
-                        Text("生成中 $preGenDone/${heritagesForGen.size}…", color = Color.White,
-                            fontSize = 13.sp)
-                    }
-                } else {
-                    Text("開始跑步", color = Color.White, fontWeight = FontWeight.SemiBold)
-                }
+                Text("開始跑步", color = Color.White, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -212,7 +172,7 @@ private fun StoryCard(
                 StoryState.IDLE -> {
                     Text("預先生成 Podcast 腳本", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(4.dp))
-                    Text("共 $heritageCount 個古蹟，點下方按鈕生成腳本後再開始跑步，進場即刻播放",
+                    Text("共 $heritageCount 個古蹟。預先生成後開始跑步可即刻播放；也可直接跑步，到達古蹟 40m 內自動生成。",
                         fontSize = 13.sp, color = Color(0xFF888888), lineHeight = 20.sp)
                     Spacer(Modifier.height(12.dp))
                     PodcastMinutesInput(minutes = minutes, onMinutesChange = onMinutesChange)
