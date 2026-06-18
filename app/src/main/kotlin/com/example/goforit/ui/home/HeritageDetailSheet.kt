@@ -3,6 +3,7 @@ package com.example.goforit.ui.home
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -24,7 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material3.AlertDialog
@@ -616,15 +617,16 @@ private fun GoExploreButton(
         onClick = onClick,
         modifier = modifier.size(56.dp),
         shape = CircleShape,
-        color = Color(0xFF356AE6),
+        color = Color.White,
+        border = BorderStroke(1.dp, Color(0xFFE3DED8)),
         shadowElevation = 6.dp
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
-                Icons.AutoMirrored.Filled.Send,
+                Icons.AutoMirrored.Outlined.Send,
                 contentDescription = "去探索",
-                tint = Color.White,
-                modifier = Modifier.size(24.dp)
+                tint = Color(0xFF7E858C),
+                modifier = Modifier.size(28.dp)
             )
         }
     }

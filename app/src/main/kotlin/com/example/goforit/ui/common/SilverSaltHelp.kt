@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -38,7 +37,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
 private val Brown = Color(0xFF9B6A3F)
-private val Cream = Color(0xFFF8F3EB)
 private val DarkBrown = Color(0xFF38231A)
 
 @Composable
@@ -194,20 +192,10 @@ private fun HowToUseSilverSalt() {
 
 @Composable
 private fun SilverSaltIcon() {
-    Surface(
+    SilverSaltAssetIcon(
         modifier = Modifier.size(76.dp),
-        shape = CircleShape,
-        color = Cream
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                Icons.Default.Business,
-                contentDescription = null,
-                tint = Color(0xFF6F665F),
-                modifier = Modifier.size(34.dp)
-            )
-        }
-    }
+        contentDescription = null
+    )
 }
 
 @Composable
