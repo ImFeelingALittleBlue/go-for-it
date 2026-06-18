@@ -32,6 +32,9 @@ import com.example.goforit.ui.applyWarmMapStyle
 import com.example.goforit.ui.home.OrangeAccent
 import com.example.goforit.ui.home.TextGray
 import com.example.goforit.ui.home.rememberLocationPermission
+import com.example.goforit.ui.common.LocateMeButton
+import com.example.goforit.ui.common.currentLocationPoint
+import com.example.goforit.ui.common.moveMapToPoint
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.MapView
@@ -510,6 +513,23 @@ fun RunScreen(
                     }
                 },
                 modifier = Modifier.fillMaxSize()
+            )
+
+            LocateMeButton(
+                enabled = locationGranted,
+                onClick = {
+                    val point = tracker.points.lastOrNull() ?: currentLocationPoint(context)
+                    point?.let {
+                        moveMapToPoint(
+                            mapView = mapView,
+                            point = it,
+                            zoom = if (phase == RunPhase.RUNNING) 17.0 else 16.0
+                        )
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 12.dp, end = 12.dp)
             )
 
             if (phase == RunPhase.PRE_RUN) {

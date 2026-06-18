@@ -33,7 +33,10 @@ import com.example.goforit.data.HeritageRepository
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.SilverSaltStore
 import com.example.goforit.ui.applyWarmMapStyle
+import com.example.goforit.ui.common.LocateMeButton
 import com.example.goforit.ui.common.SilverSaltAssetIcon
+import com.example.goforit.ui.common.currentLocationPoint
+import com.example.goforit.ui.common.moveMapToPoint
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.MapView
@@ -311,6 +314,23 @@ fun HomeScreen(
                     }
                 },
                 modifier = Modifier.fillMaxSize()
+            )
+            LocateMeButton(
+                enabled = locationGranted,
+                onClick = {
+                    currentLocationPoint(context)?.let { point ->
+                        moveMapToPoint(
+                            mapView = mapView,
+                            point = point,
+                            zoom = 16.0,
+                            pitch = 48.0,
+                            bearing = -18.0
+                        )
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 64.dp, end = 12.dp)
             )
             // 地圖底部的兩顆按鈕
             MapOverlayButtons(
