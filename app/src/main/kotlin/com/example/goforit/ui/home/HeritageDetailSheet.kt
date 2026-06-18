@@ -571,7 +571,7 @@ private fun DetailTopBar(
             Text(
                 when {
                     isRestored -> "✓ 已解鎖"
-                    canUseSilverSalt -> "可解鎖"
+                    canUseSilverSalt -> "可修復"
                     else -> "X 未解鎖"
                 },
                 modifier = Modifier.padding(horizontal = 13.dp, vertical = 6.dp),
@@ -898,8 +898,8 @@ private fun HeritageActionButton(
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9B6A3F))
             ) {
                 Text(
-                    if (enough) "以時光銀鹽解鎖老照片"
-                    else "問答補足時光銀鹽，以解鎖老照片",
+                    if (enough) "以時光銀鹽修復老照片"
+                    else "問答補足時光銀鹽，以修復老照片",
                     modifier = Modifier.padding(vertical = 4.dp)
                 )
             }

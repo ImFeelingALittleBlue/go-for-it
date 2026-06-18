@@ -96,7 +96,7 @@ private fun DebugModeToggle(checked: Boolean, onCheckedChange: (Boolean) -> Unit
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            "Debug：銀鹽可解鎖",
+            "Debug：銀鹽可修復",
             fontSize = 11.sp,
             color = Color(0xFFBDB5AD),
             modifier = Modifier.weight(1f)

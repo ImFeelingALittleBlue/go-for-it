@@ -65,7 +65,7 @@ import kotlinx.coroutines.delay
 val OrangeAccent = Color(0xFF9B6A3F)    // 設計稿主色：陶土棕
 val TextGray     = Color(0xFF8F8982)
 val ChipBg       = Color(0xFFF0ECE4)
-enum class HeritageFilter { ALL, RESTORED, PENDING }
+enum class HeritageFilter { ALL, RESTORED, REPAIRABLE, PENDING }
 
 private data class SelectedPlace(
     val name: String,
@@ -90,6 +90,7 @@ fun HomeScreen(
     val heritages = remember { HeritageRepository.loadHeritages(context) }
     val restorationRecords = RestorationRepository.records().toList()
     val restoredIds = restorationRecords.map { it.heritageId }.toSet()
+    val debugSilverSaltReadyEnabled = RestorationRepository.debugSilverSaltReadyEnabled
     var heritageFilter by remember { mutableStateOf(HeritageFilter.ALL) }
     // 古蹟清單是否展開（收合時把空間讓給地圖）
     var listExpanded by remember { mutableStateOf(true) }
@@ -103,7 +104,12 @@ fun HomeScreen(
     val statusFilteredHeritages = when (heritageFilter) {
         HeritageFilter.ALL -> heritages
         HeritageFilter.RESTORED -> heritages.filter { it.id in restoredIds }
-        HeritageFilter.PENDING -> heritages.filter { it.id !in restoredIds }
+        HeritageFilter.REPAIRABLE -> heritages.filter {
+            it.id !in restoredIds && RestorationRepository.isDebugSilverSaltReady(it.id)
+        }
+        HeritageFilter.PENDING -> heritages.filter {
+            it.id !in restoredIds && !RestorationRepository.isDebugSilverSaltReady(it.id)
+        }
     }
     val visibleHeritages = statusFilteredHeritages
     var markerManager by remember { mutableStateOf<CircleAnnotationManager?>(null) }
@@ -165,7 +171,13 @@ fun HomeScreen(
     var selected by remember { mutableStateOf<Heritage?>(null) }
 
     // 篩選標籤切換時，直接用現有 manager 重畫標記（不依賴 AndroidView update 的非同步 getStyle）
-    LaunchedEffect(heritageFilter, markerManager, restoredMarkerManager, restoredIds) {
+    LaunchedEffect(
+        heritageFilter,
+        markerManager,
+        restoredMarkerManager,
+        restoredIds,
+        debugSilverSaltReadyEnabled
+    ) {
         val pendingManager = markerManager ?: return@LaunchedEffect
         val photoManager = restoredMarkerManager ?: return@LaunchedEffect
         setHeritageMarkers(
