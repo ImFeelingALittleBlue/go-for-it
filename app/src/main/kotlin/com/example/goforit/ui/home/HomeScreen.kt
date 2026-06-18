@@ -70,7 +70,8 @@ private data class SelectedPlace(
 
 @Composable
 fun HomeScreen(
-    onStartExplore: () -> Unit = {}
+    onStartExplore: () -> Unit = {},
+    onOpenExplore: () -> Unit = onStartExplore
 ) {
     val context        = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -333,7 +334,7 @@ fun HomeScreen(
             onDismiss = { selected = null },
             onStartExplore = {
                 selected = null
-                onStartExplore()
+                onOpenExplore()
             }
         )
     }

@@ -16,12 +16,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material3.AlertDialog
@@ -147,78 +150,89 @@ fun HeritageDetailSheet(
                                 .fillMaxWidth()
                                 .padding(horizontal = 20.dp, vertical = 16.dp)
                         ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (heritage.year.isNotBlank()) {
-                                Surface(shape = RoundedCornerShape(8.dp), color = ChipBg) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (heritage.year.isNotBlank()) {
+                                    Surface(shape = RoundedCornerShape(8.dp), color = ChipBg) {
+                                        Text(
+                                            "${heritage.year} 年",
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF7A6A55)
+                                        )
+                                    }
+                                }
+
+                                if (isRestored) {
                                     Text(
-                                        "${heritage.year} 年",
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                        "解鎖於 ${formatUnlockTime(
+                                            restorationRecord?.restoredAt ?: 0L
+                                        )}",
                                         fontSize = 12.sp,
-                                        color = Color(0xFF7A6A55)
+                                        color = OrangeAccent
                                     )
                                 }
                             }
 
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                heritage.name,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 24.sp,
+                                color = Color(0xFF2D1D19)
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                heritage.description,
+                                fontSize = 14.sp,
+                                color = Color(0xFF3F3935),
+                                lineHeight = 22.sp
+                            )
+                            Spacer(Modifier.height(24.dp))
+
+                            HeritageActionButton(
+                                isRestored = isRestored,
+                                isNearHeritage = isNearHeritage,
+                                points = points,
+                                onRestore = {
+                                    if (SilverSaltStore.spend(context, RESTORE_COST)) {
+                                        RestorationRepository.add(heritage)
+                                    }
+                                },
+                                onNeedSilver = { quizState = QuizState.ASKING },
+                                onExplore = onStartExplore
+                            )
+
                             if (isRestored) {
-                                Text(
-                                    "解鎖於 ${formatUnlockTime(
-                                        restorationRecord?.restoredAt ?: 0L
-                                    )}",
-                                    fontSize = 12.sp,
-                                    color = OrangeAccent
+                                Spacer(Modifier.height(12.dp))
+                                DeleteRecordButton(
+                                    text = "刪除已修復紀錄",
+                                    onClick = { showDeleteDialog = true }
                                 )
                             }
-                        }
 
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            heritage.name,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 24.sp,
-                            color = Color(0xFF2D1D19)
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            heritage.description,
-                            fontSize = 14.sp,
-                            color = Color(0xFF3F3935),
-                            lineHeight = 22.sp
-                        )
-                        Spacer(Modifier.height(24.dp))
-
-                        HeritageActionButton(
-                            isRestored = isRestored,
-                            isNearHeritage = isNearHeritage,
-                            points = points,
-                            onRestore = {
-                                if (SilverSaltStore.spend(context, RESTORE_COST)) {
-                                    RestorationRepository.add(heritage)
-                                }
-                            },
-                            onNeedSilver = { quizState = QuizState.ASKING },
-                            onExplore = onStartExplore
-                        )
-
-                        if (isRestored) {
-                            Spacer(Modifier.height(12.dp))
-                            DeleteRecordButton(
-                                text = "刪除已修復紀錄",
-                                onClick = { showDeleteDialog = true }
-                            )
-                        }
+                            Spacer(Modifier.height(96.dp))
                         }
                     }
                 }
 
-                SilverSaltHelpButton(
+                // 去探索導航鈕：固定在右下角，獨立於內容高度，避免被導覽列或圓角裁切
+                GoExploreButton(
+                    onClick = onStartExplore,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .navigationBarsPadding()
-                        .padding(end = 16.dp, bottom = 16.dp)
+                        .padding(end = 28.dp, bottom = 72.dp)
+                )
+
+                // 「?」銀鹽說明鈕：右上角街景圖上（解鎖徽章下方）
+                SilverSaltHelpButton(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(top = 56.dp, end = 16.dp)
                 )
             }
         }
@@ -590,6 +604,29 @@ private fun streetViewErrorMessage(errorBody: String): String {
             "請先為 Google Cloud 專案啟用計費"
         else ->
             "Google Street View 拒絕了這次請求"
+    }
+}
+
+@Composable
+private fun GoExploreButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.size(56.dp),
+        shape = CircleShape,
+        color = Color(0xFF356AE6),
+        shadowElevation = 6.dp
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                Icons.AutoMirrored.Filled.Send,
+                contentDescription = "去探索",
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
+            )
+        }
     }
 }
 

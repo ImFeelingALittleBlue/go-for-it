@@ -87,17 +87,24 @@ private fun MainApp() {
                 modifier         = Modifier.padding(innerPadding)
             ) {
                 composable(Screen.Home.route) {
+                    // 切到「去探索」分頁的共用導航（restoreState 保留分頁狀態）
+                    val goToExplore = {
+                        navController.navigate(Screen.Run.route) {
+                            popUpTo(navController.graph.startDestinationId) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
                     HomeScreen(
+                        // 首頁「立即探索」：切分頁並自動開始跑步
                         onStartExplore = {
                             autoStartRunRequest++
-                            navController.navigate(Screen.Run.route) {
-                                popUpTo(navController.graph.startDestinationId) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        }
+                            goToExplore()
+                        },
+                        // 古蹟詳情導航鈕：只切到去探索分頁，不自動開始跑步
+                        onOpenExplore = goToExplore
                     )
                 }
                 composable(Screen.Run.route) {
