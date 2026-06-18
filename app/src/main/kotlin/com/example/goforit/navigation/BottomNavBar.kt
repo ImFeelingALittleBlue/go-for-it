@@ -1,11 +1,22 @@
 package com.example.goforit.navigation
 
-import androidx.compose.material3.Icon
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 
@@ -23,7 +34,12 @@ fun BottomNavBar(navController: NavController) {
         // 用 Screen.items 自動產生每一個分頁按鈕，不用手寫四次
         Screen.items.forEach { screen ->
             NavigationBarItem(
-                icon  = { Icon(screen.icon, contentDescription = screen.label) },
+                icon  = {
+                    BottomNavAssetIcon(
+                        assetName = screen.iconAsset,
+                        contentDescription = screen.label
+                    )
+                },
                 label = { Text(screen.label) },
                 // 判斷這個按鈕是不是目前所在的頁面（決定是否高亮）
                 selected = currentRoute == screen.route,
@@ -39,5 +55,33 @@ fun BottomNavBar(navController: NavController) {
                 }
             )
         }
+    }
+}
+
+@Composable
+private fun BottomNavAssetIcon(
+    assetName: String,
+    contentDescription: String
+) {
+    val context = LocalContext.current
+    val bitmap = remember(context, assetName) {
+        runCatching {
+            context.assets.open(assetName).use { stream ->
+                val source = BitmapFactory.decodeStream(stream)
+                val iconHeight = (source.height * 0.72f).toInt().coerceIn(1, source.height)
+                Bitmap.createBitmap(source, 0, 0, source.width, iconHeight)
+                    .asImageBitmap()
+            }
+        }.getOrNull()
+    }
+
+    bitmap?.let {
+        Image(
+            bitmap = it,
+            contentDescription = contentDescription,
+            contentScale = ContentScale.Fit,
+            colorFilter = ColorFilter.tint(Color(0xFF2F2A27)),
+            modifier = Modifier.size(38.dp)
+        )
     }
 }
