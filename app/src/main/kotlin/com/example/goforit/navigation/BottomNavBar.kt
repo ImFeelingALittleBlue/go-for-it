@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,19 +31,31 @@ fun BottomNavBar(navController: NavController) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    NavigationBar {
+    NavigationBar(
+        containerColor = Color(0xFFFBF7F0),
+        tonalElevation = 0.dp
+    ) {
         // 用 Screen.items 自動產生每一個分頁按鈕，不用手寫四次
         Screen.items.forEach { screen ->
+            val selected = currentRoute == screen.route
             NavigationBarItem(
                 icon  = {
                     BottomNavAssetIcon(
                         assetName = screen.iconAsset,
-                        contentDescription = screen.label
+                        contentDescription = screen.label,
+                        selected = selected
                     )
                 },
                 label = { Text(screen.label) },
                 // 判斷這個按鈕是不是目前所在的頁面（決定是否高亮）
-                selected = currentRoute == screen.route,
+                selected = selected,
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF6E5E52),
+                    selectedTextColor = Color(0xFF6E5E52),
+                    indicatorColor = Color(0xFFEDE3D9),
+                    unselectedIconColor = Color(0xFF8B8780),
+                    unselectedTextColor = Color(0xFF8B8780)
+                ),
                 onClick = {
                     navController.navigate(screen.route) {
                         // 回到起點再跳，避免按很多次後退堆疊一堆頁面
@@ -61,7 +74,8 @@ fun BottomNavBar(navController: NavController) {
 @Composable
 private fun BottomNavAssetIcon(
     assetName: String,
-    contentDescription: String
+    contentDescription: String,
+    selected: Boolean
 ) {
     val context = LocalContext.current
     val bitmap = remember(context, assetName) {
@@ -80,7 +94,7 @@ private fun BottomNavAssetIcon(
             bitmap = it,
             contentDescription = contentDescription,
             contentScale = ContentScale.Fit,
-            colorFilter = ColorFilter.tint(Color(0xFF2F2A27)),
+            colorFilter = ColorFilter.tint(if (selected) Color(0xFF6E5E52) else Color(0xFF8B8780)),
             modifier = Modifier.size(38.dp)
         )
     }

@@ -1,6 +1,7 @@
 package com.example.goforit.ui.home
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -73,7 +74,11 @@ fun MapHeritageSection(
         statusFiltered.filter { it.name.contains(query, ignoreCase = true) }
     }
 
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Color(0xFFF3EEE6))
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -147,7 +152,6 @@ fun MapHeritageSection(
                             restoredAt = restoredAtById[heritage.id] ?: 0L,
                             onClick = { onHeritageClick(heritage) }
                         )
-                        HorizontalDivider(color = ChipBg, thickness = 1.dp)
                     }
                 }
             }
@@ -205,7 +209,6 @@ fun NearbyHeritageSection(modifier: Modifier = Modifier) {
         Column {
             sampleSites.forEach { (name, period, unlocked) ->
                 HeritageItem(name = name, period = period, unlocked = unlocked)
-                HorizontalDivider(color = ChipBg, thickness = 1.dp)
             }
         }
     }
@@ -258,7 +261,7 @@ fun StatusChip(
     Surface(
         modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
         shape = RoundedCornerShape(16.dp),
-        color = if (active) OrangeAccent else ChipBg
+        color = if (active) Color(0xFF6F6B65) else Color(0xFFFFFDF8)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -275,7 +278,7 @@ fun StatusChip(
             Text(
                 text = text,
                 fontSize = 12.sp,
-                color = if (active) Color.White else Color(0xFF1A1A1A)
+                color = if (active) Color.White else Color(0xFF7A756F)
             )
         }
     }
@@ -288,43 +291,44 @@ private fun MapHeritageItem(
     onClick: () -> Unit
 ) {
     val restored = restoredAt > 0L
-    Row(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(horizontal = 16.dp, vertical = 5.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(13.dp),
+        color = Color(0xFFFFFDF8),
+        shadowElevation = 1.dp
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(heritage.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-            Spacer(Modifier.height(2.dp))
-            Text(
-                when {
-                    restored -> "解鎖於 ${formatUnlockTime(restoredAt)}"
-                    else -> heritage.year.ifBlank { "待修復" }
-                },
-                fontSize = 12.sp,
-                color = TextGray
-            )
-        }
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = when {
-                restored -> OrangeAccent         // 橘色：已修復
-                else     -> Color(0xFF888888)    // 灰色：待修復
-            }
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = when {
-                    restored -> "已修復"
-                    else     -> "待修復"
-                },
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                fontSize = 12.sp,
-                color = Color.White,
-                fontWeight = FontWeight.Medium
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(heritage.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Color(0xFF342820))
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    when {
+                        restored -> "解鎖於 ${formatUnlockTime(restoredAt)}"
+                        else -> heritage.year.ifBlank { "待修復" }
+                    },
+                    fontSize = 12.sp,
+                    color = TextGray
+                )
+            }
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = if (restored) Color(0xFFEDE3D9) else Color(0xFFF0F0EF)
+            ) {
+                Text(
+                    text = if (restored) "已修復" else "未解鎖",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    fontSize = 12.sp,
+                    color = if (restored) OrangeAccent else Color(0xFF7A756F),
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }

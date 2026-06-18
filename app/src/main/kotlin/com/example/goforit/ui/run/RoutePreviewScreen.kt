@@ -80,10 +80,10 @@ fun RoutePreviewScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(obs); mapView.onDestroy() }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF5F0EB))) {
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF3EEE6))) {
 
         // ── 頂部列 ─────────────────────────────────────────────────────────
-        Box(modifier = Modifier.fillMaxWidth().background(Color.White)
+        Box(modifier = Modifier.fillMaxWidth().background(Color(0xFFFFFDF8))
             .padding(horizontal = 8.dp, vertical = 12.dp)) {
             TextButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
                 Text("← 返回", color = Color(0xFF1A1A1A), fontSize = 14.sp)
@@ -106,14 +106,14 @@ fun RoutePreviewScreen(
                             if (points.size >= 2)
                                 annotations.createPolylineAnnotationManager().create(
                                     PolylineAnnotationOptions().withPoints(points)
-                                        .withLineColor("#D4822A").withLineWidth(4.0))
+                                        .withLineColor("#9B6A3F").withLineWidth(4.0))
                         }
                     }
                 },
                 modifier = Modifier.fillMaxSize()
             )
             Surface(modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
-                shape = RoundedCornerShape(16.dp), color = Color(0xFF5C3D1E)) {
+                shape = RoundedCornerShape(16.dp), color = Color(0xFF3B211A)) {
                 Text("距離 ${"%.1f".format(distanceKm)}km", color = Color.White,
                     fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
@@ -137,7 +137,7 @@ fun RoutePreviewScreen(
         }
 
         // ── 底部按鈕 ───────────────────────────────────────────────────────
-        Row(modifier = Modifier.fillMaxWidth().background(Color.White)
+        Row(modifier = Modifier.fillMaxWidth().background(Color(0xFFFBF7F0))
             .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = {}, modifier = Modifier.weight(1f).height(48.dp),
@@ -163,7 +163,7 @@ private fun StoryCard(
     onMinutesChange: (Int) -> Unit, onGenerate: () -> Unit, onCancel: () -> Unit
 ) {
     Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(12.dp), color = Color.White) {
+        shape = RoundedCornerShape(12.dp), color = Color(0xFFFFFDF8)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("AI生成 Podcast", fontSize = 11.sp, color = Color(0xFFD4A96A),
                 fontWeight = FontWeight.Medium)
@@ -179,7 +179,7 @@ private fun StoryCard(
                     Spacer(Modifier.height(12.dp))
                     Button(onClick = onGenerate, modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(24.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5C3D1E))) {
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B211A))) {
                         Text("預先生成腳本", color = Color.White, fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(vertical = 2.dp))
                     }

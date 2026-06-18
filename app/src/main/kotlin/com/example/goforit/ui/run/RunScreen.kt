@@ -32,6 +32,9 @@ import com.example.goforit.ui.applyWarmMapStyle
 import com.example.goforit.ui.home.OrangeAccent
 import com.example.goforit.ui.home.TextGray
 import com.example.goforit.ui.home.rememberLocationPermission
+import com.example.goforit.ui.common.LocateMeButton
+import com.example.goforit.ui.common.currentLocationPoint
+import com.example.goforit.ui.common.moveMapToPoint
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.MapView
@@ -355,7 +358,7 @@ fun RunScreen(
         else -> Unit
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF3EEE6))) {
 
         // ── 頁首：路線跑步時顯示銀鹽+統計；直接跑步時顯示標題或暫停確認 ───
         if (selectedRoutePoints.isNotEmpty() && phase != RunPhase.PRE_RUN) {
@@ -368,7 +371,7 @@ fun RunScreen(
         } else if (selectedRoutePoints.isEmpty()) {
             when (phase) {
                 RunPhase.PRE_RUN -> Box(
-                    modifier = Modifier.fillMaxWidth().background(Color.White)
+                    modifier = Modifier.fillMaxWidth().background(Color(0xFFFFFDF8))
                         .padding(horizontal = 20.dp, vertical = 14.dp)
                 ) {
                     Column {
@@ -422,7 +425,7 @@ fun RunScreen(
                                 nav = summary
                             },
                             shape = RoundedCornerShape(24.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5C3D1E))
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B211A))
                         ) { Text("結束跑步", color = Color.White, fontSize = 13.sp) }
                     }
                     DirectRunStatsRow(coveredKm, elapsedSeconds)
@@ -448,7 +451,7 @@ fun RunScreen(
                                     CircleAnnotationOptions()
                                         .withPoint(Point.fromLngLat(h.lng, h.lat))
                                         .withCircleRadius(7.0)
-                                        .withCircleColor("#888888")
+                                        .withCircleColor("#496F8E")
                                         .withCircleStrokeWidth(1.5)
                                         .withCircleStrokeColor("#FFFFFF")
                                 }
@@ -496,7 +499,7 @@ fun RunScreen(
                         routeLineManager?.create(
                             PolylineAnnotationOptions()
                                 .withPoints(selectedRoutePoints)
-                                .withLineColor("#C8A46A").withLineWidth(3.0)
+                                .withLineColor("#C9B08D").withLineWidth(3.0)
                         )
                     }
                     // 畫 GPS 即時軌跡（深橘色）
@@ -505,11 +508,28 @@ fun RunScreen(
                         polylineManager?.deleteAll()
                         polylineManager?.create(
                             PolylineAnnotationOptions()
-                                .withPoints(pts).withLineColor("#D4822A").withLineWidth(5.0)
+                                .withPoints(pts).withLineColor("#9B6A3F").withLineWidth(5.0)
                         )
                     }
                 },
                 modifier = Modifier.fillMaxSize()
+            )
+
+            LocateMeButton(
+                enabled = locationGranted,
+                onClick = {
+                    val point = tracker.points.lastOrNull() ?: currentLocationPoint(context)
+                    point?.let {
+                        moveMapToPoint(
+                            mapView = mapView,
+                            point = it,
+                            zoom = if (phase == RunPhase.RUNNING) 17.0 else 16.0
+                        )
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 12.dp, end = 12.dp)
             )
 
             if (phase == RunPhase.PRE_RUN) {
@@ -517,7 +537,7 @@ fun RunScreen(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .background(Color.White.copy(alpha = 0.95f))
+                        .background(Color(0xFFFBF7F0).copy(alpha = 0.96f))
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {

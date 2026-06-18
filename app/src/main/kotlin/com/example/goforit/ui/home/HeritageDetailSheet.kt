@@ -3,6 +3,9 @@ package com.example.goforit.ui.home
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
@@ -63,6 +66,7 @@ import com.example.goforit.R
 import com.example.goforit.data.Heritage
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.SilverSaltStore
+import com.example.goforit.ui.common.SilverSaltAssetIcon
 import com.example.goforit.ui.common.SilverSaltHelpButton
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -91,6 +95,7 @@ fun HeritageDetailSheet(
     val isRestored = restorationRecord != null
     var quizState by remember(heritage.id) { mutableStateOf<QuizState?>(null) }
     var showDeleteDialog by remember(heritage.id) { mutableStateOf(false) }
+    var isRestoring by remember(heritage.id) { mutableStateOf(false) }
     var locationGranted by remember { mutableStateOf(false) }
     val hasLocationPermission = rememberLocationPermission { locationGranted = true }
     val isNearHeritage by rememberIsNearHeritage(
@@ -125,7 +130,14 @@ fun HeritageDetailSheet(
                             .weight(1f)
                         .verticalScroll(rememberScrollState())
                     ) {
-                        if (isRestored) {
+                        if (isRestoring) {
+                            RestorationProgressHero(
+                                onFinished = {
+                                    RestorationRepository.add(heritage)
+                                    isRestoring = false
+                                }
+                            )
+                        } else if (isRestored) {
                             RestoredStreetViewComparison(heritage)
                         } else if (quizState != null) {
                             HeritageQuizHero(
@@ -200,11 +212,12 @@ fun HeritageDetailSheet(
 
                             HeritageActionButton(
                                 isRestored = isRestored,
+                                isRestoring = isRestoring,
                                 isNearHeritage = isNearHeritage,
                                 points = points,
                                 onRestore = {
                                     if (SilverSaltStore.spend(context, RESTORE_COST)) {
-                                        RestorationRepository.add(heritage)
+                                        isRestoring = true
                                     }
                                 },
                                 onNeedSilver = { quizState = QuizState.ASKING },
@@ -337,6 +350,73 @@ private fun NearbyUnlockHero(
             ) {
                 Text("使用 $RESTORE_COST 銀鹽修復")
             }
+        }
+    }
+}
+
+@Composable
+private fun RestorationProgressHero(
+    onFinished: () -> Unit
+) {
+    val progress = remember { Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        progress.snapTo(0f)
+        progress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(
+                durationMillis = 2400,
+                easing = LinearEasing
+            )
+        )
+        onFinished()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(280.dp)
+            .background(Color(0xFF6D6D6A)),
+        contentAlignment = Alignment.Center
+    ) {
+        PerspectiveGrid(modifier = Modifier.fillMaxSize())
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF2F2F2F).copy(alpha = 0.32f))
+        )
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 48.dp)
+        ) {
+            SilverSaltAssetIcon(
+                modifier = Modifier.size(78.dp),
+                contentDescription = null
+            )
+            Spacer(Modifier.height(18.dp))
+            Text(
+                "修復中...請稍候",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(Modifier.height(12.dp))
+            LinearProgressIndicator(
+                progress = { progress.value },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(7.dp),
+                color = Color(0xFFE8D7B8),
+                trackColor = Color.White.copy(alpha = 0.86f)
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "${(progress.value * 100).toInt()}%",
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }
@@ -750,6 +830,7 @@ private fun GoExploreButton(
 @Composable
 private fun HeritageActionButton(
     isRestored: Boolean,
+    isRestoring: Boolean,
     isNearHeritage: Boolean,
     points: Int,
     onRestore: () -> Unit,
@@ -757,6 +838,20 @@ private fun HeritageActionButton(
     onExplore: () -> Unit
 ) {
     when {
+        isRestoring -> {
+            Button(
+                onClick = {},
+                enabled = false,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(
+                    disabledContainerColor = Color(0xFF9B6A3F),
+                    disabledContentColor = Color.White
+                )
+            ) {
+                Text("修復中...請稍候", modifier = Modifier.padding(vertical = 4.dp))
+            }
+        }
         isRestored -> {
             Button(
                 onClick = {},
