@@ -22,19 +22,27 @@ import androidx.core.content.ContextCompat
 fun rememberLocationPermission(onGranted: () -> Unit): Boolean {
     val context = LocalContext.current
 
+    fun hasAnyLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+
     // 先檢查手機上目前的權限狀態
     var hasPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context, Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-        )
+        mutableStateOf(hasAnyLocationPermission())
     }
 
     // launcher：負責彈出「允許定位」對話框，並接收使用者的選擇
     val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        val granted = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         hasPermission = granted
         if (granted) onGranted()  // 使用者按「允許」才執行
     }
@@ -44,7 +52,12 @@ fun rememberLocationPermission(onGranted: () -> Unit): Boolean {
         if (hasPermission) {
             onGranted()                                           // 已有權限，直接開始
         } else {
-            launcher.launch(Manifest.permission.ACCESS_FINE_LOCATION)  // 彈出詢問框
+            launcher.launch(                                      // 彈出詢問框
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
         }
     }
 

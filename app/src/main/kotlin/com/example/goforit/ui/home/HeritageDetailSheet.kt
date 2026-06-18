@@ -138,22 +138,6 @@ fun HeritageDetailSheet(
                                 onRetry = { quizState = QuizState.ASKING },
                                 onCancel = { quizState = null }
                             )
-                        } else if (isNearHeritage && points >= RESTORE_COST) {
-                            NearbyUnlockHero(
-                                heritage = heritage,
-                                onRestore = {
-                                    if (SilverSaltStore.spend(context, RESTORE_COST)) {
-                                        RestorationRepository.add(heritage)
-                                    }
-                                }
-                            )
-                        } else if (isNearHeritage) {
-                            InsufficientSilverHero(
-                                points = points,
-                                onQuizClick = {
-                                    quizState = QuizState.ASKING
-                                }
-                            )
                         } else {
                             CurrentStreetView(heritage)
                         }
@@ -652,8 +636,8 @@ private fun HeritageActionButton(
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9B6A3F))
             ) {
                 Text(
-                    if (enough) "修復老照片（花費 $RESTORE_COST 銀鹽）"
-                    else "銀鹽不足，回答問題取得銀鹽",
+                    if (enough) "以時光銀鹽解鎖老照片"
+                    else "問答補足時光銀鹽，以解鎖老照片",
                     modifier = Modifier.padding(vertical = 4.dp)
                 )
             }

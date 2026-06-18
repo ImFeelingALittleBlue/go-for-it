@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.goforit.data.Heritage
 
 private const val NEARBY_RADIUS_METERS = 40f
+private const val LOCATION_ACCURACY_TOLERANCE_CAP_METERS = 60f
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -41,7 +42,12 @@ fun rememberIsNearHeritage(
                 heritage.lng,
                 distance
             )
-            isNearby.value = distance[0] <= NEARBY_RADIUS_METERS
+            val accuracyTolerance = if (location.hasAccuracy()) {
+                location.accuracy.coerceIn(0f, LOCATION_ACCURACY_TOLERANCE_CAP_METERS)
+            } else {
+                0f
+            }
+            isNearby.value = distance[0] <= NEARBY_RADIUS_METERS + accuracyTolerance
         }
 
         listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
