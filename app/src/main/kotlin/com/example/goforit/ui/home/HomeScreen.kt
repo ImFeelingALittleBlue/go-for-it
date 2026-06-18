@@ -72,7 +72,8 @@ private data class SelectedPlace(
 @Composable
 fun HomeScreen(
     onStartExplore: () -> Unit = {},
-    onOpenExplore: () -> Unit = onStartExplore
+    onOpenExplore: () -> Unit = onStartExplore,
+    onOpenAccount: () -> Unit = {}
 ) {
     val context        = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -312,7 +313,10 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxSize()
             )
             // 地圖底部的兩顆按鈕
-            MapOverlayButtons(modifier = Modifier.align(Alignment.BottomCenter))
+            MapOverlayButtons(
+                onMissingPlaceClick = onOpenAccount,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
         }
 
         // ── 全部古蹟列表：展開時占 45%，收合時只留標題列 ────────────────────
@@ -516,18 +520,29 @@ private fun PlaceSuggestionsCard(
 }
 
 @Composable
-fun MapOverlayButtons(modifier: Modifier = Modifier) {
+fun MapOverlayButtons(
+    onMissingPlaceClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Row(
         modifier = modifier.fillMaxWidth().padding(12.dp),
         horizontalArrangement = Arrangement.Start
     ) {
-        MapPill("找不到你要的地點？")
+        MapPill("找不到你要的地點？", onClick = onMissingPlaceClick)
     }
 }
 
 @Composable
-fun MapPill(text: String) {
-    Surface(shape = RoundedCornerShape(20.dp), color = Color.White, shadowElevation = 4.dp) {
+fun MapPill(
+    text: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(20.dp),
+        color = Color.White,
+        shadowElevation = 4.dp
+    ) {
         Text(
             text = text,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),

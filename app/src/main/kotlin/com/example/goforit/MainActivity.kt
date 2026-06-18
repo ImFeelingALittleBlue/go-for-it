@@ -97,6 +97,15 @@ private fun MainApp() {
                             restoreState = true
                         }
                     }
+                    val goToAccount = {
+                        navController.navigate(Screen.Account.route) {
+                            popUpTo(navController.graph.startDestinationId) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
                     HomeScreen(
                         // 首頁「立即探索」：切分頁並自動開始跑步
                         onStartExplore = {
@@ -104,7 +113,9 @@ private fun MainApp() {
                             goToExplore()
                         },
                         // 古蹟詳情導航鈕：只切到去探索分頁，不自動開始跑步
-                        onOpenExplore = goToExplore
+                        onOpenExplore = goToExplore,
+                        // 地圖「找不到你要的地點？」：切到帳號頁的回饋區
+                        onOpenAccount = goToAccount
                     )
                 }
                 composable(Screen.Run.route) {
