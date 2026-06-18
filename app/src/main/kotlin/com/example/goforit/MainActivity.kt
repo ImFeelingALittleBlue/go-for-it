@@ -57,6 +57,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     // 已登入 → 啟動雲端監聽（用目前帳號的 uid），再進主畫面
                     LaunchedEffect(user!!.uid) {
+                        RestorationRepository.initDebugSeed(applicationContext)
                         RestorationRepository.start()
                         RouteRepository.start()
                     }

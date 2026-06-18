@@ -35,8 +35,9 @@ import com.example.goforit.data.SilverSaltStore
 import com.example.goforit.ui.applyWarmMapStyle
 import com.example.goforit.ui.common.LocateMeButton
 import com.example.goforit.ui.common.SilverSaltAssetIcon
-import com.example.goforit.ui.common.currentLocationPoint
 import com.example.goforit.ui.common.moveMapToPoint
+import com.example.goforit.ui.common.requestCurrentLocationPoint
+import com.example.goforit.ui.common.showCurrentLocationMarker
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.MapView
@@ -108,6 +109,8 @@ fun HomeScreen(
     var markerManager by remember { mutableStateOf<CircleAnnotationManager?>(null) }
     var restoredMarkerManager by remember { mutableStateOf<PointAnnotationManager?>(null) }
     var searchMarkerManager by remember { mutableStateOf<CircleAnnotationManager?>(null) }
+    var currentLocationMarkerManager by remember { mutableStateOf<CircleAnnotationManager?>(null) }
+    var currentLocationLoaded by remember { mutableStateOf(false) }
     val markerLookup = remember { mutableMapOf<String, Heritage>() }
     var markerClickListenerInstalled by remember { mutableStateOf(false) }
 
@@ -258,7 +261,7 @@ fun HomeScreen(
                 // update：當 locationGranted 變成 true 時被呼叫，此時樣式已載入完成
                 update = { mv ->
                     if (locationGranted) {
-                        mv.location.updateSettings { enabled = true }
+                        mv.location.updateSettings { enabled = false }
                     }
                     mv.mapboxMap.getStyle {
                         val manager = markerManager
@@ -271,6 +274,16 @@ fun HomeScreen(
                             ?: mv.annotations.createCircleAnnotationManager().also {
                                 searchMarkerManager = it
                             }
+                        val currentManager = currentLocationMarkerManager
+                            ?: mv.annotations.createCircleAnnotationManager().also {
+                                currentLocationMarkerManager = it
+                            }
+                        if (locationGranted && !currentLocationLoaded) {
+                            currentLocationLoaded = true
+                            requestCurrentLocationPoint(context) { point ->
+                                showCurrentLocationMarker(currentManager, point)
+                            }
+                        }
                         if (!markerClickListenerInstalled) {
                             manager.addClickListener(
                                 OnCircleAnnotationClickListener { annotation ->
@@ -318,7 +331,12 @@ fun HomeScreen(
             LocateMeButton(
                 enabled = locationGranted,
                 onClick = {
-                    currentLocationPoint(context)?.let { point ->
+                    requestCurrentLocationPoint(context) { point ->
+                        val manager = currentLocationMarkerManager
+                            ?: mapView.annotations.createCircleAnnotationManager().also {
+                                currentLocationMarkerManager = it
+                            }
+                        showCurrentLocationMarker(manager, point)
                         moveMapToPoint(
                             mapView = mapView,
                             point = point,

@@ -1,6 +1,10 @@
 package com.example.goforit.data
 
+import android.content.Context
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.CollectionReference
@@ -14,12 +18,44 @@ import com.google.firebase.ktx.Firebase
 //
 // 資料路徑：users/{匿名uid}/restorations/{自動id}
 object RestorationRepository {
+    private const val DEBUG_PREFS = "restoration_debug_prefs"
+    private const val LEGACY_KEY_DEBUG_RESTORED_SEED = "debug_restored_seed_enabled"
+    private const val KEY_DEBUG_SILVER_SALT_READY = "debug_silver_salt_ready_enabled"
+
+    private val debugSilverSaltReadyIds = setOf(1, 2, 3, 14, 66)
+
+    var debugSilverSaltReadyEnabled by mutableStateOf(false)
+        private set
 
     // 收藏頁觀察這份清單；snapshotListener 一有變動就更新它，畫面自動重畫
     private val records = mutableStateListOf<RestorationRecord>()
+    private val cloudRecords = mutableListOf<RestorationRecord>()
     private var started = false   // 避免重複啟動監聽
 
     fun records(): SnapshotStateList<RestorationRecord> = records
+
+    fun initDebugSeed(context: Context) {
+        val prefs = context.applicationContext
+            .getSharedPreferences(DEBUG_PREFS, Context.MODE_PRIVATE)
+        debugSilverSaltReadyEnabled = prefs.getBoolean(KEY_DEBUG_SILVER_SALT_READY, false) ||
+            prefs.getBoolean(LEGACY_KEY_DEBUG_RESTORED_SEED, false)
+        rebuildRecords()
+    }
+
+    fun setDebugSeedEnabled(context: Context, enabled: Boolean) {
+        context.applicationContext
+            .getSharedPreferences(DEBUG_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_DEBUG_SILVER_SALT_READY, enabled)
+            .putBoolean(LEGACY_KEY_DEBUG_RESTORED_SEED, false)
+            .apply()
+
+        debugSilverSaltReadyEnabled = enabled
+        rebuildRecords()
+    }
+
+    fun isDebugSilverSaltReady(heritageId: Int): Boolean =
+        debugSilverSaltReadyEnabled && heritageId in debugSilverSaltReadyIds
 
     // App 啟動時呼叫：先確保匿名登入，再開始監聽自己的紀錄
     fun start() {
@@ -38,14 +74,20 @@ object RestorationRepository {
         collection()?.orderBy("restoredAt", Query.Direction.DESCENDING)
             ?.addSnapshotListener { snapshot, _ ->
                 if (snapshot == null) return@addSnapshotListener
-                records.clear()
+                cloudRecords.clear()
                 for (doc in snapshot.documents) {
                     // 把 Firestore 文件轉回 RestorationRecord，並補上文件 id
                     doc.toObject(RestorationRecord::class.java)
                         ?.copy(docId = doc.id)
-                        ?.let { records.add(it) }
+                        ?.let { cloudRecords.add(it) }
                 }
+                rebuildRecords()
             }
+    }
+
+    private fun rebuildRecords() {
+        records.clear()
+        records.addAll(cloudRecords)
     }
 
     // 修復古蹟成功時呼叫：寫一筆紀錄到雲端
@@ -61,8 +103,14 @@ object RestorationRepository {
     }
 
     // 刪除某一筆紀錄
-    fun delete(docId: String) {
-        collection()?.document(docId)?.delete()
+    fun delete(record: RestorationRecord) {
+        record.docId
+            .takeIf(String::isNotBlank)
+            ?.let { docId ->
+                cloudRecords.removeAll { it.docId == docId }
+                collection()?.document(docId)?.delete()
+                rebuildRecords()
+            }
     }
 
     // 某個古蹟是否已修復（清單裡有就是已修復）

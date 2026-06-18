@@ -33,6 +33,7 @@ fun AccountScreen() {
     val runCount      = RouteRepository.records().count { it.elapsedSeconds > 0 }
     // distinctBy 去重：同一古蹟若被重複寫入，只算一次
     val unlockedCount = RestorationRepository.records().distinctBy { it.heritageId }.size
+    val debugSilverSaltReadyEnabled = RestorationRepository.debugSilverSaltReadyEnabled
 
     // 設定開關狀態（本地暫存）
     var notifyRun     by remember { mutableStateOf(true) }
@@ -67,6 +68,12 @@ fun AccountScreen() {
         SectionLabel("資料來源")
         DataSourceCard()
 
+        Spacer(Modifier.height(8.dp))
+        DebugModeToggle(
+            checked = debugSilverSaltReadyEnabled,
+            onCheckedChange = { RestorationRepository.setDebugSeedEnabled(context, it) }
+        )
+
         Spacer(Modifier.height(24.dp))
 
         // 登出
@@ -77,6 +84,33 @@ fun AccountScreen() {
             Text("登出", color = LabelColor, fontSize = 13.sp)
         }
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun DebugModeToggle(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            "Debug：銀鹽可解鎖",
+            fontSize = 11.sp,
+            color = Color(0xFFBDB5AD),
+            modifier = Modifier.weight(1f)
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = Color(0xFF9B6A3F),
+                uncheckedThumbColor = Color(0xFFD0CBC4),
+                uncheckedTrackColor = Color(0xFFEAE5DE)
+            )
+        )
     }
 }
 
