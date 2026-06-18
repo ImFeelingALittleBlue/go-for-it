@@ -33,6 +33,7 @@ import com.example.goforit.data.HeritageRepository
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.SilverSaltStore
 import com.example.goforit.ui.applyWarmMapStyle
+import com.example.goforit.ui.common.SilverSaltAssetIcon
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.MapView
@@ -71,7 +72,8 @@ private data class SelectedPlace(
 @Composable
 fun HomeScreen(
     onStartExplore: () -> Unit = {},
-    onOpenExplore: () -> Unit = onStartExplore
+    onOpenExplore: () -> Unit = onStartExplore,
+    onOpenAccount: () -> Unit = {}
 ) {
     val context        = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -311,7 +313,10 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxSize()
             )
             // 地圖底部的兩顆按鈕
-            MapOverlayButtons(modifier = Modifier.align(Alignment.BottomCenter))
+            MapOverlayButtons(
+                onMissingPlaceClick = onOpenAccount,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
         }
 
         // ── 全部古蹟列表：展開時占 45%，收合時只留標題列 ────────────────────
@@ -515,19 +520,29 @@ private fun PlaceSuggestionsCard(
 }
 
 @Composable
-fun MapOverlayButtons(modifier: Modifier = Modifier) {
+fun MapOverlayButtons(
+    onMissingPlaceClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Row(
         modifier = modifier.fillMaxWidth().padding(12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.Start
     ) {
-        MapPill("找不到你要的地點？")
-        MapPill("開啟 Google Map")
+        MapPill("找不到你要的地點？", onClick = onMissingPlaceClick)
     }
 }
 
 @Composable
-fun MapPill(text: String) {
-    Surface(shape = RoundedCornerShape(20.dp), color = Color.White, shadowElevation = 4.dp) {
+fun MapPill(
+    text: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(20.dp),
+        color = Color.White,
+        shadowElevation = 4.dp
+    ) {
         Text(
             text = text,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -554,17 +569,7 @@ private fun SilverSaltBanner() {
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 左側銀鹽圖示圓圈
-            Surface(
-                modifier = Modifier.size(36.dp),
-                shape = RoundedCornerShape(50),
-                color = Color(0xFF5C3D1E)
-            ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Text("銀", color = Color(0xFFD4A96A), fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold)
-                }
-            }
+            SilverSaltAssetIcon(modifier = Modifier.size(36.dp))
             Spacer(Modifier.width(12.dp))
             // 中間文字
             Column(modifier = Modifier.weight(1f)) {

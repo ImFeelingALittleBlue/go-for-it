@@ -3,6 +3,7 @@ package com.example.goforit.ui.home
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -24,7 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material3.AlertDialog
@@ -34,6 +35,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,7 +48,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -118,10 +123,10 @@ fun HeritageDetailSheet(
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .verticalScroll(rememberScrollState())
+                        .verticalScroll(rememberScrollState())
                     ) {
                         if (isRestored) {
-                            HeritagePhoto(heritage.photoFile)
+                            RestoredStreetViewComparison(heritage)
                         } else if (quizState != null) {
                             HeritageQuizHero(
                                 heritage = heritage,
@@ -486,6 +491,107 @@ private fun DetailTopBar(
 
 @Composable
 private fun CurrentStreetView(heritage: Heritage) {
+    val state = rememberStreetViewState(heritage)
+
+    StreetViewFrame(
+        heritage = heritage,
+        state = state
+    )
+}
+
+@Composable
+private fun RestoredStreetViewComparison(heritage: Heritage) {
+    val streetViewState = rememberStreetViewState(heritage)
+    val oldPhoto = rememberHeritagePhoto(heritage.photoFile)
+    var oldPhotoAlpha by remember(heritage.id) { mutableStateOf(0.6f) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        StreetViewFrame(
+            heritage = heritage,
+            state = streetViewState
+        ) {
+            if (oldPhoto != null && streetViewState is StreetViewState.Success) {
+                Image(
+                    bitmap = oldPhoto,
+                    contentDescription = "${heritage.name}老照片",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .alpha(oldPhotoAlpha)
+                )
+            } else if (oldPhoto != null && streetViewState is StreetViewState.Error) {
+                Image(
+                    bitmap = oldPhoto,
+                    contentDescription = "${heritage.name}老照片",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Surface(
+                    color = Color.White.copy(alpha = 0.88f),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text(
+                        "目前街景無法顯示，先顯示已解鎖老照片",
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        color = Color(0xFF554D47),
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+
+        if (oldPhoto != null && streetViewState is StreetViewState.Success) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFF8F3EB))
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "老照片透明度",
+                        color = Color(0xFF4D4038),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "${(oldPhotoAlpha * 100).toInt()}%",
+                        color = OrangeAccent,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Slider(
+                    value = oldPhotoAlpha,
+                    onValueChange = { oldPhotoAlpha = it },
+                    valueRange = 0f..1f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = OrangeAccent,
+                        activeTrackColor = Color(0xFF9B6A3F),
+                        inactiveTrackColor = Color(0xFFE0D7CB)
+                    )
+                )
+            }
+        } else if (oldPhoto == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFF8F3EB))
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("找不到老照片", color = TextGray, fontSize = 13.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun rememberStreetViewState(heritage: Heritage): StreetViewState {
     val context = LocalContext.current
     val configuredKey = context.getString(R.string.street_view_api_key)
     val apiKey = configuredKey.ifBlank { context.getString(R.string.google_api_key) }
@@ -512,6 +618,15 @@ private fun CurrentStreetView(heritage: Heritage) {
         state = loadStreetView(streetViewUrl)
     }
 
+    return state
+}
+
+@Composable
+private fun StreetViewFrame(
+    heritage: Heritage,
+    state: StreetViewState,
+    overlay: @Composable () -> Unit = {}
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -545,6 +660,7 @@ private fun CurrentStreetView(heritage: Heritage) {
                 )
             }
         }
+        overlay()
     }
 }
 
@@ -616,15 +732,16 @@ private fun GoExploreButton(
         onClick = onClick,
         modifier = modifier.size(56.dp),
         shape = CircleShape,
-        color = Color(0xFF356AE6),
+        color = Color.White,
+        border = BorderStroke(1.dp, Color(0xFFE3DED8)),
         shadowElevation = 6.dp
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
-                Icons.AutoMirrored.Filled.Send,
+                Icons.AutoMirrored.Outlined.Send,
                 contentDescription = "去探索",
-                tint = Color.White,
-                modifier = Modifier.size(24.dp)
+                tint = Color(0xFF7E858C),
+                modifier = Modifier.size(28.dp)
             )
         }
     }
@@ -966,13 +1083,7 @@ private fun formatUnlockTime(millis: Long): String =
 
 @Composable
 private fun HeritagePhoto(photoFile: String) {
-    val context = LocalContext.current
-    val bitmap = remember(photoFile) {
-        runCatching {
-            context.assets.open("photos/$photoFile").use { BitmapFactory.decodeStream(it) }
-                .asImageBitmap()
-        }.getOrNull()
-    }
+    val bitmap = rememberHeritagePhoto(photoFile)
 
     if (bitmap != null) {
         Image(
@@ -993,5 +1104,16 @@ private fun HeritagePhoto(photoFile: String) {
         ) {
             Text("找不到老照片", color = TextGray, fontSize = 13.sp)
         }
+    }
+}
+
+@Composable
+private fun rememberHeritagePhoto(photoFile: String): ImageBitmap? {
+    val context = LocalContext.current
+    return remember(photoFile) {
+        runCatching {
+            context.assets.open("photos/$photoFile").use { BitmapFactory.decodeStream(it) }
+                .asImageBitmap()
+        }.getOrNull()
     }
 }
