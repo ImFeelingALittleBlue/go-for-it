@@ -1,5 +1,6 @@
 package com.example.goforit.ui.home
 
+import android.graphics.BitmapFactory
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -29,24 +30,22 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.example.goforit.data.Heritage
 import com.example.goforit.data.HeritageRepository
-import com.example.goforit.data.MapBuildRepository
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.SilverSaltStore
 import com.example.goforit.ui.applyWarmMapStyle
-import com.mapbox.geojson.Feature
-import com.mapbox.geojson.FeatureCollection
 import com.mapbox.geojson.Point
-import com.mapbox.geojson.Polygon
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.MapView
 import com.mapbox.maps.Style
-import com.mapbox.maps.extension.style.layers.generated.FillExtrusionLayer
-import com.mapbox.maps.extension.style.sources.generated.geoJsonSource
 import com.mapbox.maps.plugin.annotation.annotations
 import com.mapbox.maps.plugin.annotation.generated.CircleAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.CircleAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.OnCircleAnnotationClickListener
+import com.mapbox.maps.plugin.annotation.generated.OnPointAnnotationClickListener
+import com.mapbox.maps.plugin.annotation.generated.PointAnnotationManager
+import com.mapbox.maps.plugin.annotation.generated.PointAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.createCircleAnnotationManager
+import com.mapbox.maps.plugin.annotation.generated.createPointAnnotationManager
 import com.mapbox.maps.plugin.gestures.gestures
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.model.AutocompletePrediction
@@ -57,24 +56,11 @@ import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRe
 import com.google.android.gms.common.api.ApiException
 import com.mapbox.maps.plugin.locationcomponent.location
 import kotlinx.coroutines.delay
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
 
 val OrangeAccent = Color(0xFFD4822A)    // 設計稿主色
 val TextGray     = Color(0xFF888888)
 val ChipBg       = Color(0xFFF0EDE8)
-private const val BUILT_BUILDINGS_SOURCE_ID = "built-heritage-buildings-source"
-private const val BUILT_BUILDINGS_PLAZA_SOURCE_ID = "built-heritage-plazas-source"
-private const val BUILT_BUILDINGS_ROOF_SOURCE_ID = "built-heritage-roofs-source"
-private const val BUILT_BUILDINGS_TOWER_SOURCE_ID = "built-heritage-towers-source"
-private const val BUILT_BUILDINGS_PLAZA_LAYER_ID = "built-heritage-plazas-layer"
-private const val BUILT_BUILDINGS_BODY_LAYER_ID = "built-heritage-buildings-body-layer"
-private const val BUILT_BUILDINGS_ROOF_LAYER_ID = "built-heritage-buildings-roof-layer"
-private const val BUILT_BUILDINGS_TOWER_LAYER_ID = "built-heritage-towers-layer"
-private const val BUILT_BUILDING_SIZE_METERS = 145.0
-
-enum class HeritageFilter { ALL, RESTORED, PENDING, BUILT }
+enum class HeritageFilter { ALL, RESTORED, PENDING }
 
 private data class SelectedPlace(
     val name: String,
@@ -97,8 +83,6 @@ fun HomeScreen(
     val heritages = remember { HeritageRepository.loadHeritages(context) }
     val restorationRecords = RestorationRepository.records().toList()
     val restoredIds = restorationRecords.map { it.heritageId }.toSet()
-    val buildRecords = MapBuildRepository.records().toList()
-    val builtIds = buildRecords.map { it.heritageId }.toSet()
     var heritageFilter by remember { mutableStateOf(HeritageFilter.ALL) }
     var searchQuery by remember { mutableStateOf("") }
     var searchSuggestions by remember {
@@ -111,15 +95,13 @@ fun HomeScreen(
         HeritageFilter.ALL -> heritages
         HeritageFilter.RESTORED -> heritages.filter { it.id in restoredIds }
         HeritageFilter.PENDING -> heritages.filter { it.id !in restoredIds }
-        HeritageFilter.BUILT -> heritages.filter { it.id in builtIds }
     }
     val visibleHeritages = statusFilteredHeritages
     var markerManager by remember { mutableStateOf<CircleAnnotationManager?>(null) }
+    var restoredMarkerManager by remember { mutableStateOf<PointAnnotationManager?>(null) }
     var searchMarkerManager by remember { mutableStateOf<CircleAnnotationManager?>(null) }
     val markerLookup = remember { mutableMapOf<String, Heritage>() }
     var markerClickListenerInstalled by remember { mutableStateOf(false) }
-    var buildingScale by remember { mutableFloatStateOf(1f) }
-    var knownBuiltIds by remember { mutableStateOf<Set<Int>?>(null) }
 
     LaunchedEffect(searchQuery) {
         searchError = null
@@ -172,28 +154,17 @@ fun HomeScreen(
     var selected by remember { mutableStateOf<Heritage?>(null) }
 
     // 篩選標籤切換時，直接用現有 manager 重畫標記（不依賴 AndroidView update 的非同步 getStyle）
-    LaunchedEffect(heritageFilter, markerManager) {
-        val manager = markerManager ?: return@LaunchedEffect
-        setHeritageMarkers(manager, visibleHeritages, restoredIds, builtIds, markerLookup)
-    }
-
-    LaunchedEffect(builtIds) {
-        val known = knownBuiltIds
-        if (known == null) {
-            knownBuiltIds = builtIds
-            return@LaunchedEffect
-        }
-        val newlyBuilt = builtIds - known
-        knownBuiltIds = builtIds
-        if (newlyBuilt.isNotEmpty()) {
-            val frames = 24
-            for (frame in 0..frames) {
-                val t = frame / frames.toFloat()
-                buildingScale = (0.22f + 0.9f * easeOutBack(t)).coerceIn(0.22f, 1.12f)
-                delay(16L)
-            }
-            buildingScale = 1f
-        }
+    LaunchedEffect(heritageFilter, markerManager, restoredMarkerManager, restoredIds) {
+        val pendingManager = markerManager ?: return@LaunchedEffect
+        val photoManager = restoredMarkerManager ?: return@LaunchedEffect
+        setHeritageMarkers(
+            context,
+            pendingManager,
+            photoManager,
+            visibleHeritages,
+            restoredIds,
+            markerLookup
+        )
     }
 
     Column(
@@ -284,6 +255,10 @@ fun HomeScreen(
                     mv.mapboxMap.getStyle {
                         val manager = markerManager
                             ?: mv.annotations.createCircleAnnotationManager().also { markerManager = it }
+                        val photoManager = restoredMarkerManager
+                            ?: mv.annotations.createPointAnnotationManager().also {
+                                restoredMarkerManager = it
+                            }
                         val placeManager = searchMarkerManager
                             ?: mv.annotations.createCircleAnnotationManager().also {
                                 searchMarkerManager = it
@@ -296,13 +271,21 @@ fun HomeScreen(
                                 }
                             )
                             markerClickListenerInstalled = true
+                            photoManager.addClickListener(
+                                OnPointAnnotationClickListener { annotation ->
+                                    markerLookup[annotation.id]?.let { selected = it }
+                                    true
+                                }
+                            )
                         }
-                        setBuiltHeritageBuildings(
-                            style = it,
-                            builtHeritages = visibleHeritages.filter { heritage -> heritage.id in builtIds },
-                            scale = buildingScale
+                        setHeritageMarkers(
+                            context,
+                            manager,
+                            photoManager,
+                            visibleHeritages,
+                            restoredIds,
+                            markerLookup
                         )
-                        setHeritageMarkers(manager, visibleHeritages, restoredIds, builtIds, markerLookup)
                         placeManager.deleteAll()
                         selectedPlace?.let { place ->
                             placeManager.create(
@@ -332,7 +315,6 @@ fun HomeScreen(
         MapHeritageSection(
             heritages = visibleHeritages,
             records = restorationRecords,
-            builtIds = builtIds,
             selectedFilter = HeritageFilter.ALL,
             onFilterChange = { heritageFilter = it },
             onHeritageClick = { selected = it },
@@ -356,195 +338,46 @@ fun HomeScreen(
     }
 }
 
-// 在地圖上把所有古蹟畫成圓點，待修復/已修復/已創建使用不同顏色。
-// onMarkerClick：點到某個圓點時，把對應的 Heritage 傳回去
 private fun setHeritageMarkers(
-    manager: CircleAnnotationManager,
+    context: android.content.Context,
+    pendingManager: CircleAnnotationManager,
+    restoredManager: PointAnnotationManager,
     heritages: List<Heritage>,
     restoredIds: Set<Int>,
-    builtIds: Set<Int>,
     markerLookup: MutableMap<String, Heritage>
 ) {
-    manager.deleteAll()
+    pendingManager.deleteAll()
+    restoredManager.deleteAll()
     markerLookup.clear()
-    val options = heritages.map { h ->
+    val pendingHeritages = heritages.filter { it.id !in restoredIds }
+    val pendingOptions = pendingHeritages.map { h ->
         CircleAnnotationOptions()
-            .withPoint(Point.fromLngLat(h.lng, h.lat))  // 圓點位置
-            .withCircleRadius(if (h.id in builtIds) 4.0 else 8.0)
-            .withCircleColor(
-                when {
-                    h.id in builtIds    -> "#4CAF50"  // 已創建：綠色
-                    h.id in restoredIds -> "#D4822A"  // 已修復待創建：橘色
-                    else                -> "#888888"  // 待修復：灰色
-                }
-            )
-            .withCircleStrokeWidth(if (h.id in builtIds) 1.5 else 2.0)
+            .withPoint(Point.fromLngLat(h.lng, h.lat))
+            .withCircleRadius(8.0)
+            .withCircleColor("#888888")
+            .withCircleStrokeWidth(2.0)
             .withCircleStrokeColor("#FFFFFF")
     }
-
-    val created = manager.create(options)
-    markerLookup.putAll(created.zip(heritages).associate { (annotation, h) -> annotation.id to h })
-}
-
-private fun setBuiltHeritageBuildings(
-    style: Style,
-    builtHeritages: List<Heritage>,
-    scale: Float
-) {
-    if (style.styleLayerExists(BUILT_BUILDINGS_ROOF_LAYER_ID)) {
-        style.removeStyleLayer(BUILT_BUILDINGS_ROOF_LAYER_ID)
-    }
-    if (style.styleLayerExists(BUILT_BUILDINGS_TOWER_LAYER_ID)) {
-        style.removeStyleLayer(BUILT_BUILDINGS_TOWER_LAYER_ID)
-    }
-    if (style.styleLayerExists(BUILT_BUILDINGS_BODY_LAYER_ID)) {
-        style.removeStyleLayer(BUILT_BUILDINGS_BODY_LAYER_ID)
-    }
-    if (style.styleLayerExists(BUILT_BUILDINGS_PLAZA_LAYER_ID)) {
-        style.removeStyleLayer(BUILT_BUILDINGS_PLAZA_LAYER_ID)
-    }
-    if (style.styleSourceExists(BUILT_BUILDINGS_TOWER_SOURCE_ID)) {
-        style.removeStyleSource(BUILT_BUILDINGS_TOWER_SOURCE_ID)
-    }
-    if (style.styleSourceExists(BUILT_BUILDINGS_ROOF_SOURCE_ID)) {
-        style.removeStyleSource(BUILT_BUILDINGS_ROOF_SOURCE_ID)
-    }
-    if (style.styleSourceExists(BUILT_BUILDINGS_SOURCE_ID)) {
-        style.removeStyleSource(BUILT_BUILDINGS_SOURCE_ID)
-    }
-    if (style.styleSourceExists(BUILT_BUILDINGS_PLAZA_SOURCE_ID)) {
-        style.removeStyleSource(BUILT_BUILDINGS_PLAZA_SOURCE_ID)
-    }
-
-    geoJsonSource(BUILT_BUILDINGS_PLAZA_SOURCE_ID)
-        .featureCollection(buildBuildingFeatureCollection(builtHeritages, scale, BuildingPart.PLAZA))
-        .bindTo(style)
-    geoJsonSource(BUILT_BUILDINGS_SOURCE_ID)
-        .featureCollection(buildBuildingFeatureCollection(builtHeritages, scale, BuildingPart.BODY))
-        .bindTo(style)
-    geoJsonSource(BUILT_BUILDINGS_ROOF_SOURCE_ID)
-        .featureCollection(buildBuildingFeatureCollection(builtHeritages, scale, BuildingPart.ROOF))
-        .bindTo(style)
-    geoJsonSource(BUILT_BUILDINGS_TOWER_SOURCE_ID)
-        .featureCollection(buildBuildingFeatureCollection(builtHeritages, scale, BuildingPart.TOWER))
-        .bindTo(style)
-
-    FillExtrusionLayer(BUILT_BUILDINGS_PLAZA_LAYER_ID, BUILT_BUILDINGS_PLAZA_SOURCE_ID)
-        .fillExtrusionColor("#FFF0C7")
-        .fillExtrusionHeight(10.0 * scale)
-        .fillExtrusionBase(0.0)
-        .fillExtrusionOpacity(0.96)
-        .fillExtrusionVerticalGradient(true)
-        .minZoom(10.8)
-        .bindTo(style)
-
-    FillExtrusionLayer(BUILT_BUILDINGS_BODY_LAYER_ID, BUILT_BUILDINGS_SOURCE_ID)
-        .fillExtrusionColor("#FF9F5A")
-        .fillExtrusionHeight(122.0 * scale)
-        .fillExtrusionBase(10.0 * scale)
-        .fillExtrusionOpacity(0.96)
-        .fillExtrusionVerticalGradient(true)
-        .minZoom(10.8)
-        .bindTo(style)
-
-    FillExtrusionLayer(BUILT_BUILDINGS_ROOF_LAYER_ID, BUILT_BUILDINGS_ROOF_SOURCE_ID)
-        .fillExtrusionColor("#FFE36D")
-        .fillExtrusionHeight(176.0 * scale)
-        .fillExtrusionBase(122.0 * scale)
-        .fillExtrusionOpacity(0.98)
-        .fillExtrusionVerticalGradient(true)
-        .minZoom(10.8)
-        .bindTo(style)
-
-    FillExtrusionLayer(BUILT_BUILDINGS_TOWER_LAYER_ID, BUILT_BUILDINGS_TOWER_SOURCE_ID)
-        .fillExtrusionColor("#FF6F61")
-        .fillExtrusionHeight(226.0 * scale)
-        .fillExtrusionBase(122.0 * scale)
-        .fillExtrusionOpacity(0.98)
-        .fillExtrusionVerticalGradient(true)
-        .minZoom(10.8)
-        .bindTo(style)
-}
-
-private enum class BuildingPart { PLAZA, BODY, ROOF, TOWER }
-
-private fun buildBuildingFeatureCollection(
-    heritages: List<Heritage>,
-    scale: Float,
-    part: BuildingPart
-): FeatureCollection {
-    val features = heritages.map { heritage ->
-        Feature.fromGeometry(buildFootprint(heritage, scale = scale, part = part))
-    }
-    return FeatureCollection.fromFeatures(features)
-}
-
-private fun buildFootprint(
-    heritage: Heritage,
-    scale: Float,
-    part: BuildingPart
-): Polygon {
-    val partScale = when (part) {
-        BuildingPart.PLAZA -> 1.36
-        BuildingPart.BODY -> 1.0
-        BuildingPart.ROOF -> 0.62
-        BuildingPart.TOWER -> 0.28
-    }
-    val size = BUILT_BUILDING_SIZE_METERS * scale * partScale
-    val variant = heritage.id % 5
-    val baseOffsets = when (variant) {
-        0 -> listOf(-0.74 to -0.44, 0.74 to -0.44, 0.74 to 0.44, -0.74 to 0.44)
-        1 -> listOf(0.0 to -0.72, 0.72 to 0.0, 0.0 to 0.72, -0.72 to 0.0)
-        2 -> (0 until 8).map { i ->
-            val angle = PI * 2.0 * i / 8.0 + PI / 8.0
-            cos(angle) * 0.68 to sin(angle) * 0.68
-        }
-        3 -> listOf(-0.72 to -0.72, 0.72 to -0.72, 0.72 to -0.18, 0.18 to -0.18, 0.18 to 0.72, -0.72 to 0.72)
-        else -> listOf(-0.46 to -0.78, 0.46 to -0.78, 0.68 to 0.0, 0.46 to 0.78, -0.46 to 0.78, -0.68 to 0.0)
-    }
-    val offsets = when (part) {
-        BuildingPart.PLAZA -> baseOffsets
-        BuildingPart.BODY -> baseOffsets
-        BuildingPart.ROOF -> baseOffsets.map { (x, y) -> x * 0.72 to y * 0.72 }
-        BuildingPart.TOWER -> {
-            val towerCenter = when (variant) {
-                0 -> 0.34 to -0.18
-                1 -> 0.0 to -0.34
-                2 -> 0.24 to 0.24
-                3 -> -0.28 to -0.28
-                else -> -0.18 to 0.28
-            }
-            (0 until 6).map { i ->
-                val angle = PI * 2.0 * i / 6.0 + PI / 6.0
-                towerCenter.first + cos(angle) * 0.5 to towerCenter.second + sin(angle) * 0.5
-            }
-        }
-    }
-    val ring = offsets.map { (x, y) ->
-        metersToPoint(heritage.lng, heritage.lat, eastMeters = x * size, northMeters = y * size)
-    }.let { it + it.first() }
-    return Polygon.fromLngLats(listOf(ring))
-}
-
-private fun metersToPoint(
-    lng: Double,
-    lat: Double,
-    eastMeters: Double,
-    northMeters: Double
-): Point {
-    val lngPerMeter = 1.0 / (111_320.0 * cos(Math.toRadians(lat)).coerceAtLeast(0.2))
-    val latPerMeter = 1.0 / 111_320.0
-    return Point.fromLngLat(
-        lng + eastMeters * lngPerMeter,
-        lat + northMeters * latPerMeter
+    val pendingCreated = pendingManager.create(pendingOptions)
+    markerLookup.putAll(
+        pendingCreated.zip(pendingHeritages).associate { (annotation, h) -> annotation.id to h }
     )
-}
 
-private fun easeOutBack(t: Float): Float {
-    val c1 = 1.70158f
-    val c3 = c1 + 1f
-    val x = t - 1f
-    return 1f + c3 * x * x * x + c1 * x * x
+    val restoredMarkers = heritages.filter { it.id in restoredIds }.mapNotNull { heritage ->
+        val bitmap = runCatching {
+            context.assets.open("thumbnails/${heritage.photoFile}")
+                .use(BitmapFactory::decodeStream)
+        }.getOrNull() ?: return@mapNotNull null
+        heritage to PointAnnotationOptions()
+            .withPoint(Point.fromLngLat(heritage.lng, heritage.lat))
+            .withIconImage(bitmap)
+            .withIconSize(2.6)
+    }
+    val restoredCreated = restoredManager.create(restoredMarkers.map { it.second })
+    markerLookup.putAll(
+        restoredCreated.zip(restoredMarkers.map { it.first })
+            .associate { (annotation, h) -> annotation.id to h }
+    )
 }
 
 private fun placesErrorMessage(exception: Exception): String {

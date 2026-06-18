@@ -21,7 +21,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.goforit.data.AuthRepository
-import com.example.goforit.data.MapBuildRepository
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.RouteRepository
 import com.example.goforit.navigation.BottomNavBar
@@ -60,7 +59,6 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(user!!.uid) {
                         RestorationRepository.start()
                         RouteRepository.start()
-                        MapBuildRepository.start()
                     }
                     MainApp()
                 }

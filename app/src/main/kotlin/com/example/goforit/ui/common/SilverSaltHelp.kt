@@ -152,7 +152,7 @@ private fun WhatIsSilverSalt() {
     SilverSaltIcon()
     Spacer(Modifier.height(18.dp))
     Text(
-        "銀鹽是修復古蹟記憶的材料。探索古蹟、完成問答可以獲得銀鹽，累積足夠後即可將解鎖的古蹟建立在你的地圖上。",
+        "銀鹽是修復古蹟記憶的材料。探索古蹟、完成問答可以獲得銀鹽，靠近古蹟並使用足夠銀鹽即可解鎖老照片。",
         color = Color(0xFF594A43),
         fontSize = 13.sp,
         lineHeight = 20.sp,
@@ -182,13 +182,13 @@ private fun HowToUseSilverSalt() {
     HelpStep(
         number = "1",
         title = "收集銀鹽",
-        description = "跑步探索古蹟並完成 Podcast；銀鹽不足時，也能回答古蹟問題取得銀鹽。"
+        description = "跑步探索並靠近古蹟；銀鹽不足時，也能回答古蹟問題取得銀鹽。"
     )
     Spacer(Modifier.height(16.dp))
     HelpStep(
         number = "2",
-        title = "使用銀鹽，收藏歷史！",
-        description = "舊照片解鎖後，使用銀鹽把古蹟建立成地圖上的 2.5D 建築。"
+        title = "使用銀鹽，修復歷史！",
+        description = "靠近古蹟並使用銀鹽修復老照片；已修復地點會以照片顯示在地圖上。"
     )
 }
 

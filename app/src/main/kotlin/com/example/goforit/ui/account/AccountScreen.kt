@@ -15,7 +15,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.goforit.data.AuthRepository
-import com.example.goforit.data.MapBuildRepository
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.RouteRepository
 
@@ -34,7 +33,6 @@ fun AccountScreen() {
     val runCount      = RouteRepository.records().count { it.elapsedSeconds > 0 }
     // distinctBy 去重：同一古蹟若被重複寫入，只算一次
     val unlockedCount = RestorationRepository.records().distinctBy { it.heritageId }.size
-    val builtCount    = MapBuildRepository.records().size
 
     // 設定開關狀態（本地暫存）
     var notifyRun     by remember { mutableStateOf(true) }
@@ -47,7 +45,7 @@ fun AccountScreen() {
             .verticalScroll(rememberScrollState())
     ) {
         // ── 個人資料卡（深棕背景）─────────────────────────────────────────
-        ProfileCard(displayName, email, runCount, unlockedCount, builtCount)
+        ProfileCard(displayName, email, runCount, unlockedCount)
 
         Spacer(Modifier.height(16.dp))
 
@@ -84,7 +82,7 @@ fun AccountScreen() {
 
 // 個人資料卡：頭像 + 名稱/Email + 三欄統計
 @Composable
-private fun ProfileCard(name: String, email: String, runs: Int, unlocked: Int, built: Int) {
+private fun ProfileCard(name: String, email: String, runs: Int, unlocked: Int) {
     Surface(color = DarkBrown, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -105,12 +103,11 @@ private fun ProfileCard(name: String, email: String, runs: Int, unlocked: Int, b
                 }
             }
             Spacer(Modifier.height(16.dp))
-            // 統計三欄
+            // 探索與修復統計
             Row(modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly) {
                 StatItem(runs.toString(), "次探索")
-                StatItem(unlocked.toString(), "解鎖古蹟")
-                StatItem(built.toString(), "創建古蹟")
+                StatItem(unlocked.toString(), "已修復古蹟")
             }
         }
     }

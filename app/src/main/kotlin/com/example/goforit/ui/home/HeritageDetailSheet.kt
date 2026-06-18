@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material3.AlertDialog
@@ -54,7 +53,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.goforit.R
 import com.example.goforit.data.Heritage
-import com.example.goforit.data.MapBuildRepository
 import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.SilverSaltStore
 import com.example.goforit.ui.common.SilverSaltHelpButton
@@ -68,11 +66,9 @@ import org.json.JSONObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private const val BUILD_COST = 100
+private const val RESTORE_COST = 100
 
 private enum class QuizState { ASKING, CORRECT, WRONG }
-private enum class BuildState { READY, BUILDING }
-private enum class DeleteTarget { RESTORATION, BUILD }
 
 @Composable
 fun HeritageDetailSheet(
@@ -85,37 +81,14 @@ fun HeritageDetailSheet(
     val restorationRecord = RestorationRepository.records()
         .firstOrNull { it.heritageId == heritage.id }
     val isRestored = restorationRecord != null
-    val buildRecord = MapBuildRepository.records()
-        .firstOrNull { it.heritageId == heritage.id }
-    val isBuilt = buildRecord != null
     var quizState by remember(heritage.id) { mutableStateOf<QuizState?>(null) }
-    var showOldPhoto by remember(heritage.id) { mutableStateOf(false) }
-    var buildState by remember(heritage.id) { mutableStateOf(BuildState.READY) }
-    var buildProgress by remember(heritage.id) { mutableStateOf(0f) }
-    var deleteTarget by remember(heritage.id) { mutableStateOf<DeleteTarget?>(null) }
+    var showDeleteDialog by remember(heritage.id) { mutableStateOf(false) }
     var locationGranted by remember { mutableStateOf(false) }
     val hasLocationPermission = rememberLocationPermission { locationGranted = true }
     val isNearHeritage by rememberIsNearHeritage(
         heritage = heritage,
         hasLocationPermission = hasLocationPermission || locationGranted
     )
-    val needsMoreSilver = isRestored &&
-        !isBuilt &&
-        points < BUILD_COST &&
-        buildState != BuildState.BUILDING
-    val canBuild = isRestored &&
-        !isBuilt &&
-        (points >= BUILD_COST || buildState == BuildState.BUILDING)
-
-    LaunchedEffect(buildState) {
-        if (buildState == BuildState.BUILDING) {
-            for (step in 1..100) {
-                buildProgress = step / 100f
-                kotlinx.coroutines.delay(18L)
-            }
-            MapBuildRepository.add(heritage)
-        }
-    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -144,14 +117,16 @@ fun HeritageDetailSheet(
                             .weight(1f)
                             .verticalScroll(rememberScrollState())
                     ) {
-                        if (quizState != null) {
+                        if (isRestored) {
+                            HeritagePhoto(heritage.photoFile)
+                        } else if (quizState != null) {
                             HeritageQuizHero(
                                 heritage = heritage,
                                 points = points,
                                 state = quizState ?: QuizState.ASKING,
                                 onAnswer = { isCorrect ->
                                     if (isCorrect) {
-                                        val reward = (BUILD_COST - points).coerceAtLeast(0) + 2
+                                        val reward = (RESTORE_COST - points).coerceAtLeast(0) + 2
                                         if (reward > 0) {
                                             SilverSaltStore.add(context, reward)
                                         }
@@ -163,35 +138,22 @@ fun HeritageDetailSheet(
                                 onRetry = { quizState = QuizState.ASKING },
                                 onCancel = { quizState = null }
                             )
-                        } else if (!isRestored && isNearHeritage) {
+                        } else if (isNearHeritage && points >= RESTORE_COST) {
                             NearbyUnlockHero(
                                 heritage = heritage,
-                                onExplore = onStartExplore
+                                onRestore = {
+                                    if (SilverSaltStore.spend(context, RESTORE_COST)) {
+                                        RestorationRepository.add(heritage)
+                                    }
+                                }
                             )
-                        } else if (needsMoreSilver && !showOldPhoto) {
+                        } else if (isNearHeritage) {
                             InsufficientSilverHero(
                                 points = points,
                                 onQuizClick = {
                                     quizState = QuizState.ASKING
                                 }
                             )
-                        } else if (canBuild && !showOldPhoto) {
-                            ReadyToBuildHero(
-                                points = points,
-                                state = buildState,
-                                progress = buildProgress,
-                                onBuild = {
-                                    if (
-                                        buildState == BuildState.READY &&
-                                        SilverSaltStore.spend(context, BUILD_COST)
-                                    ) {
-                                        buildProgress = 0f
-                                        buildState = BuildState.BUILDING
-                                    }
-                                }
-                            )
-                        } else if (isRestored) {
-                            HeritagePhoto(heritage.photoFile)
                         } else {
                             CurrentStreetView(heritage)
                         }
@@ -246,39 +208,22 @@ fun HeritageDetailSheet(
 
                         HeritageActionButton(
                             isRestored = isRestored,
-                            isBuilt = isBuilt,
+                            isNearHeritage = isNearHeritage,
                             points = points,
-                            onBuild = {
-                                if (SilverSaltStore.spend(context, BUILD_COST)) {
-                                    MapBuildRepository.add(heritage)
+                            onRestore = {
+                                if (SilverSaltStore.spend(context, RESTORE_COST)) {
+                                    RestorationRepository.add(heritage)
                                 }
                             },
-                            onNeedSilver = {
-                                if (quizState != null) {
-                                    quizState = null
-                                    showOldPhoto = true
-                                } else {
-                                    showOldPhoto = !showOldPhoto
-                                }
-                            },
-                            shortageMode = needsMoreSilver || quizState != null,
-                            showingOldPhoto = showOldPhoto,
-                            quizActive = quizState != null,
-                            buildPanelMode = canBuild,
-                            building = buildState == BuildState.BUILDING
+                            onNeedSilver = { quizState = QuizState.ASKING },
+                            onExplore = onStartExplore
                         )
 
-                        if (isRestored || isBuilt) {
+                        if (isRestored) {
                             Spacer(Modifier.height(12.dp))
-                            RecordDeleteActions(
-                                isRestored = isRestored,
-                                isBuilt = isBuilt,
-                                onDeleteRestoration = {
-                                    deleteTarget = DeleteTarget.RESTORATION
-                                },
-                                onDeleteBuild = {
-                                    deleteTarget = DeleteTarget.BUILD
-                                }
+                            DeleteRecordButton(
+                                text = "刪除已修復紀錄",
+                                onClick = { showDeleteDialog = true }
                             )
                         }
                         }
@@ -295,29 +240,16 @@ fun HeritageDetailSheet(
         }
     }
 
-    deleteTarget?.let { target ->
+    if (showDeleteDialog) {
         DeleteRecordDialog(
-            target = target,
             onConfirm = {
-                when (target) {
-                    DeleteTarget.BUILD -> {
-                        buildRecord?.docId
-                            ?.takeIf { it.isNotBlank() }
-                            ?.let(MapBuildRepository::delete)
-                    }
-                    DeleteTarget.RESTORATION -> {
-                        buildRecord?.docId
-                            ?.takeIf { it.isNotBlank() }
-                            ?.let(MapBuildRepository::delete)
-                        restorationRecord?.docId
-                            ?.takeIf { it.isNotBlank() }
-                            ?.let(RestorationRepository::delete)
-                    }
-                }
-                deleteTarget = null
+                restorationRecord?.docId
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let(RestorationRepository::delete)
+                showDeleteDialog = false
                 onDismiss()
             },
-            onDismiss = { deleteTarget = null }
+            onDismiss = { showDeleteDialog = false }
         )
     }
 }
@@ -325,7 +257,7 @@ fun HeritageDetailSheet(
 @Composable
 private fun NearbyUnlockHero(
     heritage: Heritage,
-    onExplore: () -> Unit
+    onRestore: () -> Unit
 ) {
     val context = LocalContext.current
     val bitmap = remember(heritage.photoFile) {
@@ -384,7 +316,7 @@ private fun NearbyUnlockHero(
                 color = Color(0xFF6E6863).copy(alpha = 0.78f)
             ) {
                 Text(
-                    "✓ 已生成路線故事 Podcast\n｜尚未前往探索此古蹟",
+                    "✓ 已靠近此古蹟\n｜使用銀鹽即可修復老照片",
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                     color = Color.White,
                     fontSize = 11.sp,
@@ -393,14 +325,14 @@ private fun NearbyUnlockHero(
             }
             Spacer(Modifier.height(10.dp))
             Button(
-                onClick = onExplore,
+                onClick = onRestore,
                 shape = RoundedCornerShape(22.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFFF8F3EB),
                     contentColor = Color(0xFF8E5D3B)
                 )
             ) {
-                Text("前往探索")
+                Text("使用 $RESTORE_COST 銀鹽修復")
             }
         }
     }
@@ -435,7 +367,7 @@ private fun InsufficientSilverHero(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        Icons.Default.Business,
+                        Icons.Default.DirectionsRun,
                         contentDescription = null,
                         tint = Color(0xFF6A625B)
                     )
@@ -443,7 +375,7 @@ private fun InsufficientSilverHero(
             }
             Spacer(Modifier.height(12.dp))
             Text(
-                "創建於我的地圖！",
+                "修復老照片",
                 color = Color.White,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
@@ -455,11 +387,11 @@ private fun InsufficientSilverHero(
                 color = Color(0xFF8C8A86)
             ) {
                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                    Text("創建所需時光銀鹽", color = Color.White, fontSize = 11.sp)
+                    Text("修復所需時光銀鹽", color = Color.White, fontSize = 11.sp)
                     Spacer(Modifier.height(5.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         LinearProgressIndicator(
-                            progress = { (points / BUILD_COST.toFloat()).coerceIn(0f, 1f) },
+                            progress = { (points / RESTORE_COST.toFloat()).coerceIn(0f, 1f) },
                             modifier = Modifier
                                 .weight(1f)
                                 .height(6.dp),
@@ -467,7 +399,7 @@ private fun InsufficientSilverHero(
                             trackColor = Color(0xFFD4D0C9)
                         )
                         Spacer(Modifier.padding(horizontal = 4.dp))
-                        Text("$points / $BUILD_COST", color = Color.White, fontSize = 11.sp)
+                        Text("$points / $RESTORE_COST", color = Color.White, fontSize = 11.sp)
                     }
                 }
             }
@@ -481,81 +413,6 @@ private fun InsufficientSilverHero(
                 )
             ) {
                 Text("以問答補足")
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReadyToBuildHero(
-    points: Int,
-    state: BuildState,
-    progress: Float,
-    onBuild: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(280.dp)
-            .background(Color(0xFF777777))
-    ) {
-        PerspectiveGrid(modifier = Modifier.fillMaxSize())
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .padding(horizontal = 48.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Surface(
-                modifier = Modifier.height(68.dp),
-                shape = RoundedCornerShape(50),
-                color = Color(0xFFF8F3EB)
-            ) {
-                Box(
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.Business,
-                        contentDescription = null,
-                        tint = Color(0xFF6A625B)
-                    )
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-            Text(
-                if (state == BuildState.BUILDING) "創建中…請稍候" else "創建於我的地圖！",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(10.dp))
-
-            if (state == BuildState.BUILDING) {
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp),
-                    color = Color(0xFFF6E5B5),
-                    trackColor = Color(0xFFD0CDC7)
-                )
-                Spacer(Modifier.height(6.dp))
-                Text("${(progress * 100).toInt()}%", color = Color.White, fontSize = 11.sp)
-            } else {
-                SilverProgressCard(points = points)
-                Spacer(Modifier.height(10.dp))
-                Button(
-                    onClick = onBuild,
-                    shape = RoundedCornerShape(22.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFF8F3EB),
-                        contentColor = Color(0xFF52743E)
-                    )
-                ) {
-                    Text("創建")
-                }
             }
         }
     }
@@ -755,18 +612,14 @@ private fun streetViewErrorMessage(errorBody: String): String {
 @Composable
 private fun HeritageActionButton(
     isRestored: Boolean,
-    isBuilt: Boolean,
+    isNearHeritage: Boolean,
     points: Int,
-    onBuild: () -> Unit,
+    onRestore: () -> Unit,
     onNeedSilver: () -> Unit,
-    shortageMode: Boolean,
-    showingOldPhoto: Boolean,
-    quizActive: Boolean,
-    buildPanelMode: Boolean,
-    building: Boolean
+    onExplore: () -> Unit
 ) {
     when {
-        !isRestored -> {
+        isRestored -> {
             Button(
                 onClick = {},
                 enabled = false,
@@ -777,89 +630,33 @@ private fun HeritageActionButton(
                     disabledContainerColor = Color(0xFFC9C9C9)
                 )
             ) {
-                Text("創建我的地圖", modifier = Modifier.padding(vertical = 4.dp))
+                Text("已修復", modifier = Modifier.padding(vertical = 4.dp))
             }
         }
-        isBuilt -> {
+        !isNearHeritage -> {
             Button(
-                onClick = {},
-                enabled = false,
+                onClick = onExplore,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                colors = ButtonDefaults.buttonColors(disabledContainerColor = Color(0xFF9B6A3F))
-            ) {
-                Icon(Icons.Default.Business, contentDescription = null)
-                Spacer(Modifier.padding(horizontal = 4.dp))
-                Text("已創建於我的地圖", modifier = Modifier.padding(vertical = 4.dp))
-            }
-        }
-        shortageMode -> {
-            Button(
-                onClick = onNeedSilver,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9B6A3F))
             ) {
-                Text(
-                    if (showingOldPhoto && !quizActive) "返回創建地圖" else "查看舊照片",
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
-            }
-        }
-        buildPanelMode -> {
-            Button(
-                onClick = onNeedSilver,
-                enabled = !building,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF9B6A3F),
-                    disabledContainerColor = Color(0xFFC9C9C9)
-                )
-            ) {
-                Text(
-                    if (showingOldPhoto) "返回創建地圖" else "查看舊照片",
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
+                Text("前往古蹟附近以修復老照片", modifier = Modifier.padding(vertical = 4.dp))
             }
         }
         else -> {
-            val enough = points >= BUILD_COST
+            val enough = points >= RESTORE_COST
             Button(
-                onClick = if (enough) onBuild else onNeedSilver,
+                onClick = if (enough) onRestore else onNeedSilver,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9B6A3F))
             ) {
                 Text(
-                    if (enough) "創建我的地圖（花費 $BUILD_COST 銀鹽）"
+                    if (enough) "修復老照片（花費 $RESTORE_COST 銀鹽）"
                     else "銀鹽不足，回答問題取得銀鹽",
                     modifier = Modifier.padding(vertical = 4.dp)
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun RecordDeleteActions(
-    isRestored: Boolean,
-    isBuilt: Boolean,
-    onDeleteRestoration: () -> Unit,
-    onDeleteBuild: () -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (isBuilt) {
-            DeleteRecordButton(
-                text = "刪除已創建紀錄",
-                onClick = onDeleteBuild
-            )
-        }
-        if (isRestored) {
-            DeleteRecordButton(
-                text = "刪除已修復紀錄",
-                onClick = onDeleteRestoration
-            )
         }
     }
 }
@@ -887,26 +684,20 @@ private fun DeleteRecordButton(
 
 @Composable
 private fun DeleteRecordDialog(
-    target: DeleteTarget,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val deletingRestoration = target == DeleteTarget.RESTORATION
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                if (deletingRestoration) "刪除已修復紀錄？" else "刪除已創建紀錄？",
+                "刪除已修復紀錄？",
                 fontWeight = FontWeight.Bold
             )
         },
         text = {
             Text(
-                if (deletingRestoration) {
-                    "舊照片會重新鎖定，已創建的 2.5D 建築也會一併移除。"
-                } else {
-                    "地圖上的 2.5D 建築會被移除，已解鎖的舊照片仍會保留。"
-                }
+                "老照片會重新鎖定，地圖標記也會恢復為待修復圓點。"
             )
         },
         confirmButton = {
@@ -1049,7 +840,7 @@ private fun HeritageQuizHero(
                     Text(
                         when (state) {
                             QuizState.ASKING -> "答對即可獲得時光銀鹽"
-                            QuizState.CORRECT -> "獲得時光銀鹽，已達創建門檻"
+                            QuizState.CORRECT -> "獲得時光銀鹽，已達修復門檻"
                             QuizState.WRONG -> "沒有關係，再試一次"
                         },
                         color = Color(0xFFCDBFB8),
@@ -1097,11 +888,11 @@ private fun SilverProgressCard(points: Int) {
         color = Color(0xFF8B8985).copy(alpha = 0.9f)
     ) {
         Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
-            Text("創建所需時光銀鹽", color = Color.White, fontSize = 10.sp)
+            Text("修復所需時光銀鹽", color = Color.White, fontSize = 10.sp)
             Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 LinearProgressIndicator(
-                    progress = { (points / BUILD_COST.toFloat()).coerceIn(0f, 1f) },
+                    progress = { (points / RESTORE_COST.toFloat()).coerceIn(0f, 1f) },
                     modifier = Modifier
                         .weight(1f)
                         .height(5.dp),
@@ -1109,7 +900,7 @@ private fun SilverProgressCard(points: Int) {
                     trackColor = Color(0xFFD0CDC7)
                 )
                 Spacer(Modifier.padding(horizontal = 4.dp))
-                Text("$points / $BUILD_COST", color = Color.White, fontSize = 10.sp)
+                Text("$points / $RESTORE_COST", color = Color.White, fontSize = 10.sp)
             }
         }
     }
