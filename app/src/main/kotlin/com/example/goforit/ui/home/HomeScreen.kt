@@ -84,6 +84,8 @@ fun HomeScreen(
     val restorationRecords = RestorationRepository.records().toList()
     val restoredIds = restorationRecords.map { it.heritageId }.toSet()
     var heritageFilter by remember { mutableStateOf(HeritageFilter.ALL) }
+    // 古蹟清單是否展開（收合時把空間讓給地圖）
+    var listExpanded by remember { mutableStateOf(true) }
     var searchQuery by remember { mutableStateOf("") }
     var searchSuggestions by remember {
         mutableStateOf<List<AutocompletePrediction>>(emptyList())
@@ -221,8 +223,8 @@ fun HomeScreen(
         // ── 時光銀鹽累計橫條 ────────────────────────────────────────────────
         SilverSaltBanner()
 
-        // ── 地圖（占畫面 55%）───────────────────────────────────────────────
-        Box(modifier = Modifier.weight(0.55f)) {
+        // ── 地圖：清單收合時撐滿剩餘空間，展開時占 55% ──────────────────────
+        Box(modifier = if (listExpanded) Modifier.weight(0.55f) else Modifier.weight(1f)) {
             AndroidView(
                 factory = {
                     mapView.apply {
@@ -311,14 +313,16 @@ fun HomeScreen(
             MapOverlayButtons(modifier = Modifier.align(Alignment.BottomCenter))
         }
 
-        // ── 全部古蹟列表（占 45%）：用狀態區分已修復 / 待修復 ───────────────
+        // ── 全部古蹟列表：展開時占 45%，收合時只留標題列 ────────────────────
         MapHeritageSection(
             heritages = heritages,
             records = restorationRecords,
             selectedFilter = heritageFilter,
             onFilterChange = { heritageFilter = it },
             onHeritageClick = { selected = it },
-            modifier = Modifier.weight(0.70f)
+            expanded = listExpanded,
+            onExpandedChange = { listExpanded = it },
+            modifier = if (listExpanded) Modifier.weight(0.70f) else Modifier
         )
     }
 

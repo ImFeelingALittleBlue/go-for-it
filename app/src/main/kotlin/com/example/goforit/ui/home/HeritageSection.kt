@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,6 +46,8 @@ fun MapHeritageSection(
     onFilterChange: (HeritageFilter) -> Unit,
     onHeritageClick: (Heritage) -> Unit,
     modifier: Modifier = Modifier,
+    expanded: Boolean = true,
+    onExpandedChange: (Boolean) -> Unit = {},
     filterHeritages: Boolean = true,
     chipHeritages: List<Heritage> = heritages,
     chipSelectedFilter: HeritageFilter = selectedFilter
@@ -74,69 +77,78 @@ fun MapHeritageSection(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clickable { onExpandedChange(!expanded) }
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text("古蹟與遺址", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "展開", tint = TextGray)
+            // 展開時箭頭朝下，收合時轉 180° 朝上
+            Icon(
+                Icons.Default.KeyboardArrowDown,
+                contentDescription = if (expanded) "收合" else "展開",
+                tint = TextGray,
+                modifier = Modifier.rotate(if (expanded) 0f else 180f)
+            )
         }
 
-        LazyRow(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item {
-                StatusChip(
-                    text = "全部 ${chipHeritages.size}",
-                    active = chipSelectedFilter == HeritageFilter.ALL,
-                    onClick = { onFilterChange(HeritageFilter.ALL) }
-                )
-            }
-            item {
-                StatusChip(
-                    text = "已修復 $restoredCount",
-                    active = chipSelectedFilter == HeritageFilter.RESTORED,
-                    indicatorColor = OrangeAccent,          // 橘色：已修復
-                    onClick = { onFilterChange(HeritageFilter.RESTORED) }
-                )
-            }
-            item {
-                StatusChip(
-                    text = "待修復 $pendingCount",
-                    active = chipSelectedFilter == HeritageFilter.PENDING,
-                    indicatorColor = Color(0xFF888888),     // 灰色：待修復
-                    onClick = { onFilterChange(HeritageFilter.PENDING) }
-                )
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        // 古蹟名稱搜尋框：即時過濾下方清單
-        HeritageSearchField(
-            query = searchQuery,
-            onQueryChange = { searchQuery = it }
-        )
-
-        Spacer(Modifier.height(4.dp))
-
-        if (filteredHeritages.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(24.dp),
-                contentAlignment = Alignment.Center
+        if (expanded) {
+            LazyRow(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("沒有符合條件的古蹟", color = TextGray, fontSize = 14.sp)
-            }
-        } else {
-            LazyColumn {
-                items(filteredHeritages, key = { it.id }) { heritage ->
-                    MapHeritageItem(
-                        heritage = heritage,
-                        restoredAt = restoredAtById[heritage.id] ?: 0L,
-                        onClick = { onHeritageClick(heritage) }
+                item {
+                    StatusChip(
+                        text = "全部 ${chipHeritages.size}",
+                        active = chipSelectedFilter == HeritageFilter.ALL,
+                        onClick = { onFilterChange(HeritageFilter.ALL) }
                     )
-                    HorizontalDivider(color = ChipBg, thickness = 1.dp)
+                }
+                item {
+                    StatusChip(
+                        text = "已修復 $restoredCount",
+                        active = chipSelectedFilter == HeritageFilter.RESTORED,
+                        indicatorColor = OrangeAccent,          // 橘色：已修復
+                        onClick = { onFilterChange(HeritageFilter.RESTORED) }
+                    )
+                }
+                item {
+                    StatusChip(
+                        text = "待修復 $pendingCount",
+                        active = chipSelectedFilter == HeritageFilter.PENDING,
+                        indicatorColor = Color(0xFF888888),     // 灰色：待修復
+                        onClick = { onFilterChange(HeritageFilter.PENDING) }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // 古蹟名稱搜尋框：即時過濾下方清單
+            HeritageSearchField(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it }
+            )
+
+            Spacer(Modifier.height(4.dp))
+
+            if (filteredHeritages.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("沒有符合條件的古蹟", color = TextGray, fontSize = 14.sp)
+                }
+            } else {
+                LazyColumn {
+                    items(filteredHeritages, key = { it.id }) { heritage ->
+                        MapHeritageItem(
+                            heritage = heritage,
+                            restoredAt = restoredAtById[heritage.id] ?: 0L,
+                            onClick = { onHeritageClick(heritage) }
+                        )
+                        HorizontalDivider(color = ChipBg, thickness = 1.dp)
+                    }
                 }
             }
         }
