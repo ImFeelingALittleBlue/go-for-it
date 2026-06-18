@@ -58,9 +58,9 @@ import com.google.android.gms.common.api.ApiException
 import com.mapbox.maps.plugin.locationcomponent.location
 import kotlinx.coroutines.delay
 
-val OrangeAccent = Color(0xFFD4822A)    // 設計稿主色
-val TextGray     = Color(0xFF888888)
-val ChipBg       = Color(0xFFF0EDE8)
+val OrangeAccent = Color(0xFF9B6A3F)    // 設計稿主色：陶土棕
+val TextGray     = Color(0xFF8F8982)
+val ChipBg       = Color(0xFFF0ECE4)
 enum class HeritageFilter { ALL, RESTORED, PENDING }
 
 private data class SelectedPlace(
@@ -173,7 +173,7 @@ fun HomeScreen(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().background(Color.White)
+        modifier = Modifier.fillMaxSize().background(Color(0xFFF3EEE6))
     ) {
         // ── 搜尋列 ──────────────────────────────────────────────────────────
         Box(modifier = Modifier.zIndex(2f)) {
@@ -297,7 +297,7 @@ fun HomeScreen(
                                 CircleAnnotationOptions()
                                     .withPoint(place.point)
                                     .withCircleRadius(11.0)
-                                    .withCircleColor("#356AE6")
+                                    .withCircleColor("#496F8E")
                                     .withCircleStrokeWidth(3.0)
                                     .withCircleStrokeColor("#FFFFFF")
                             )
@@ -361,7 +361,7 @@ private fun setHeritageMarkers(
         CircleAnnotationOptions()
             .withPoint(Point.fromLngLat(h.lng, h.lat))
             .withCircleRadius(8.0)
-            .withCircleColor("#888888")
+            .withCircleColor("#496F8E")
             .withCircleStrokeWidth(2.0)
             .withCircleStrokeColor("#FFFFFF")
     }
@@ -408,8 +408,8 @@ fun HomeSearchBar(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(24.dp),
-        color = ChipBg,
-        shadowElevation = 2.dp
+        color = Color(0xFFFFFDF8),
+        shadowElevation = 4.dp
     ) {
         TextField(
             value = query,
@@ -417,7 +417,7 @@ fun HomeSearchBar(
             modifier = Modifier.fillMaxWidth(),
             placeholder = { Text("搜尋你的地圖", color = TextGray, fontSize = 14.sp) },
             leadingIcon = {
-                Icon(Icons.Default.Search, contentDescription = null, tint = TextGray)
+                Icon(Icons.Default.Search, contentDescription = null, tint = OrangeAccent)
             },
             trailingIcon = if (query.isNotEmpty()) {
                 {
@@ -451,7 +451,7 @@ private fun PlaceSuggestionsCard(
             .padding(horizontal = 16.dp)
             .padding(top = 72.dp),
         shape = RoundedCornerShape(18.dp),
-        color = Color.White,
+        color = Color(0xFFFFFDF8),
         shadowElevation = 8.dp
     ) {
         Column {
@@ -540,14 +540,14 @@ fun MapPill(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(20.dp),
-        color = Color.White,
+        color = Color(0xFF3B211A),
         shadowElevation = 4.dp
     ) {
         Text(
             text = text,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
             fontSize = 12.sp,
-            color = Color(0xFF1A1A1A)
+            color = Color.White
         )
     }
 }
@@ -561,9 +561,9 @@ private fun SilverSaltBanner() {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = Color.White,
-        shadowElevation = 2.dp
+        shape = RoundedCornerShape(14.dp),
+        color = Color(0xFFFFFDF8),
+        shadowElevation = 3.dp
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),

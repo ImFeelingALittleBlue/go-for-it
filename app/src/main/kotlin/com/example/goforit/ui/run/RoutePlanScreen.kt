@@ -103,9 +103,9 @@ fun RoutePlanScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(obs); mapView.onDestroy() }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF5F0EB))) {
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF3EEE6))) {
         // ── 頂部列 ──────────────────────────────────────────────────────────
-        Box(modifier = Modifier.fillMaxWidth().background(Color.White)
+        Box(modifier = Modifier.fillMaxWidth().background(Color(0xFFFFFDF8))
             .padding(horizontal = 8.dp, vertical = 12.dp)) {
             TextButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
                 Text("← 返回", color = Color(0xFF1A1A1A), fontSize = 14.sp)
@@ -135,7 +135,7 @@ fun RoutePlanScreen(
                             heritageManager.value?.create(heritages.map { h ->
                                 CircleAnnotationOptions()
                                     .withPoint(Point.fromLngLat(h.lng, h.lat))
-                                    .withCircleRadius(7.0).withCircleColor("#888888")
+                                    .withCircleRadius(7.0).withCircleColor("#496F8E")
                                     .withCircleStrokeWidth(1.5).withCircleStrokeColor("#FFFFFF")
                             })
                             // 中層：Directions API 回傳的路線折線
@@ -165,7 +165,7 @@ fun RoutePlanScreen(
                         pm.deleteAll()
                         if (routePoints.size >= 2) pm.create(
                             PolylineAnnotationOptions().withPoints(routePoints)
-                                .withLineColor("#D4822A").withLineWidth(4.0))
+                                .withLineColor("#9B6A3F").withLineWidth(4.0))
                     }
                     // 重繪使用者路線點（起點綠、終點紅、中間橘）
                     circleManager.value?.let { cm ->
@@ -175,7 +175,7 @@ fun RoutePlanScreen(
                             val color = when (i) {
                                 0            -> "#4CAF50"
                                 pts.size - 1 -> "#E53935"
-                                else         -> "#D4822A"
+                                else         -> "#9B6A3F"
                             }
                             cm.create(CircleAnnotationOptions().withPoint(pt)
                                 .withCircleRadius(10.0).withCircleColor(color)
@@ -201,7 +201,7 @@ fun RoutePlanScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (distanceKm > 0f) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                        Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFF5C3D1E)) {
+                        Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFF3B211A)) {
                             Text("路線距離 ${"%.2f".format(distanceKm)} km",
                                 color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
