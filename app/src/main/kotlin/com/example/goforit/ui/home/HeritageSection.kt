@@ -7,9 +7,15 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -46,7 +52,9 @@ fun MapHeritageSection(
     val restoredAtById = records.associate { it.heritageId to it.restoredAt }
     val restoredCount = chipHeritages.count { it.id in restoredAtById }
     val pendingCount = chipHeritages.size - restoredCount
-    val filteredHeritages = if (!filterHeritages) {
+    // 列表搜尋字串：只過濾下方清單，不影響地圖標記
+    var searchQuery by remember { mutableStateOf("") }
+    val statusFiltered = if (!filterHeritages) {
         heritages
     } else {
         when (selectedFilter) {
@@ -54,6 +62,12 @@ fun MapHeritageSection(
             HeritageFilter.RESTORED -> heritages.filter { it.id in restoredAtById }
             HeritageFilter.PENDING -> heritages.filter { it.id !in restoredAtById }
         }
+    }
+    val query = searchQuery.trim()
+    val filteredHeritages = if (query.isBlank()) {
+        statusFiltered
+    } else {
+        statusFiltered.filter { it.name.contains(query, ignoreCase = true) }
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -96,6 +110,14 @@ fun MapHeritageSection(
                 )
             }
         }
+
+        Spacer(Modifier.height(8.dp))
+
+        // 古蹟名稱搜尋框：即時過濾下方清單
+        HeritageSearchField(
+            query = searchQuery,
+            onQueryChange = { searchQuery = it }
+        )
 
         Spacer(Modifier.height(4.dp))
 
@@ -175,6 +197,42 @@ fun NearbyHeritageSection(modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+// 古蹟名稱搜尋框
+@Composable
+private fun HeritageSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit
+) {
+    TextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        placeholder = { Text("搜尋古蹟名稱", color = TextGray, fontSize = 13.sp) },
+        leadingIcon = {
+            Icon(Icons.Default.Search, contentDescription = null, tint = TextGray)
+        },
+        trailingIcon = if (query.isNotEmpty()) {
+            {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Default.Close, contentDescription = "清除", tint = TextGray)
+                }
+            }
+        } else {
+            null
+        },
+        singleLine = true,
+        shape = RoundedCornerShape(20.dp),
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = ChipBg,
+            unfocusedContainerColor = ChipBg,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent
+        )
+    )
 }
 
 // 篩選標籤元件

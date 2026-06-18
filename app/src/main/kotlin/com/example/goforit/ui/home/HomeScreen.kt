@@ -313,15 +313,12 @@ fun HomeScreen(
 
         // ── 全部古蹟列表（占 45%）：用狀態區分已修復 / 待修復 ───────────────
         MapHeritageSection(
-            heritages = visibleHeritages,
+            heritages = heritages,
             records = restorationRecords,
-            selectedFilter = HeritageFilter.ALL,
+            selectedFilter = heritageFilter,
             onFilterChange = { heritageFilter = it },
             onHeritageClick = { selected = it },
-            modifier = Modifier.weight(0.70f),
-            filterHeritages = false,
-            chipHeritages = heritages,
-            chipSelectedFilter = heritageFilter
+            modifier = Modifier.weight(0.70f)
         )
     }
 
