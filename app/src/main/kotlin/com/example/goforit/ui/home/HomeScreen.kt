@@ -519,10 +519,9 @@ private fun PlaceSuggestionsCard(
 fun MapOverlayButtons(modifier: Modifier = Modifier) {
     Row(
         modifier = modifier.fillMaxWidth().padding(12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.Start
     ) {
         MapPill("找不到你要的地點？")
-        MapPill("開啟 Google Map")
     }
 }
 
