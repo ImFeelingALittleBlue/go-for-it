@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.goforit.data.Heritage
+import com.example.goforit.data.RestorationRepository
 import com.example.goforit.data.RestorationRecord
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -55,7 +56,10 @@ fun MapHeritageSection(
 ) {
     val restoredAtById = records.associate { it.heritageId to it.restoredAt }
     val restoredCount = chipHeritages.count { it.id in restoredAtById }
-    val pendingCount = chipHeritages.size - restoredCount
+    val repairableCount = chipHeritages.count {
+        it.id !in restoredAtById && RestorationRepository.isDebugSilverSaltReady(it.id)
+    }
+    val pendingCount = chipHeritages.size - restoredCount - repairableCount
     // 列表搜尋字串：只過濾下方清單，不影響地圖標記
     var searchQuery by remember { mutableStateOf("") }
     val statusFiltered = if (!filterHeritages) {
@@ -64,7 +68,12 @@ fun MapHeritageSection(
         when (selectedFilter) {
             HeritageFilter.ALL -> heritages
             HeritageFilter.RESTORED -> heritages.filter { it.id in restoredAtById }
-            HeritageFilter.PENDING -> heritages.filter { it.id !in restoredAtById }
+            HeritageFilter.REPAIRABLE -> heritages.filter {
+                it.id !in restoredAtById && RestorationRepository.isDebugSilverSaltReady(it.id)
+            }
+            HeritageFilter.PENDING -> heritages.filter {
+                it.id !in restoredAtById && !RestorationRepository.isDebugSilverSaltReady(it.id)
+            }
         }
     }
     val query = searchQuery.trim()
@@ -115,6 +124,14 @@ fun MapHeritageSection(
                         active = chipSelectedFilter == HeritageFilter.RESTORED,
                         indicatorColor = OrangeAccent,          // 橘色：已修復
                         onClick = { onFilterChange(HeritageFilter.RESTORED) }
+                    )
+                }
+                item {
+                    StatusChip(
+                        text = "可修復 $repairableCount",
+                        active = chipSelectedFilter == HeritageFilter.REPAIRABLE,
+                        indicatorColor = Color(0xFFB07A4A),
+                        onClick = { onFilterChange(HeritageFilter.REPAIRABLE) }
                     )
                 }
                 item {
@@ -291,6 +308,7 @@ private fun MapHeritageItem(
     onClick: () -> Unit
 ) {
     val restored = restoredAt > 0L
+    val silverSaltReady = !restored && RestorationRepository.isDebugSilverSaltReady(heritage.id)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -311,6 +329,7 @@ private fun MapHeritageItem(
                 Text(
                     when {
                         restored -> "解鎖於 ${formatUnlockTime(restoredAt)}"
+                        silverSaltReady -> "可使用時光銀鹽修復"
                         else -> heritage.year.ifBlank { "待修復" }
                     },
                     fontSize = 12.sp,
@@ -319,13 +338,17 @@ private fun MapHeritageItem(
             }
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = if (restored) Color(0xFFEDE3D9) else Color(0xFFF0F0EF)
+                color = if (restored || silverSaltReady) Color(0xFFEDE3D9) else Color(0xFFF0F0EF)
             ) {
                 Text(
-                    text = if (restored) "已修復" else "未解鎖",
+                    text = when {
+                        restored -> "已修復"
+                        silverSaltReady -> "可修復"
+                        else -> "未解鎖"
+                    },
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                     fontSize = 12.sp,
-                    color = if (restored) OrangeAccent else Color(0xFF7A756F),
+                    color = if (restored || silverSaltReady) OrangeAccent else Color(0xFF7A756F),
                     fontWeight = FontWeight.Medium
                 )
             }

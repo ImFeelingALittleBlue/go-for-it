@@ -33,13 +33,15 @@ import com.example.goforit.ui.home.OrangeAccent
 import com.example.goforit.ui.home.TextGray
 import com.example.goforit.ui.home.rememberLocationPermission
 import com.example.goforit.ui.common.LocateMeButton
-import com.example.goforit.ui.common.currentLocationPoint
 import com.example.goforit.ui.common.moveMapToPoint
+import com.example.goforit.ui.common.requestCurrentLocationPoint
+import com.example.goforit.ui.common.showCurrentLocationMarker
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.MapView
 import com.mapbox.maps.Style
 import com.mapbox.maps.plugin.annotation.annotations
+import com.mapbox.maps.plugin.annotation.generated.CircleAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.CircleAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.PolylineAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.PolylineAnnotationOptions
@@ -103,6 +105,8 @@ fun RunScreen(
     var locationGranted by remember { mutableStateOf(false) }
     var polylineManager    by remember { mutableStateOf<PolylineAnnotationManager?>(null) }
     var routeLineManager   by remember { mutableStateOf<PolylineAnnotationManager?>(null) }
+    var currentLocationMarkerManager by remember { mutableStateOf<CircleAnnotationManager?>(null) }
+    var currentLocationLoaded by remember { mutableStateOf(false) }
     val pointCount         = tracker.points.size   // 觀察 GPS 新點，觸發 update block
     val unlockedDuringRun  = remember { mutableStateListOf<Int>() }
     val podcastRequestedDuringRun = remember { mutableStateListOf<Int>() }
@@ -471,6 +475,7 @@ fun RunScreen(
                             // routeLineManager 先建（在下層）→ polylineManager 在上層蓋 GPS 軌跡
                             routeLineManager = annotations.createPolylineAnnotationManager()
                             polylineManager  = annotations.createPolylineAnnotationManager()
+                            currentLocationMarkerManager = annotations.createCircleAnnotationManager()
                             // 點擊地圖：偵測 80m 內最近的古蹟，顯示名稱提示框
                             mapboxMap.addOnMapClickListener { tapped ->
                                 val near = heritages.minByOrNull { h ->
@@ -492,7 +497,7 @@ fun RunScreen(
                     }
                 },
                 update = { mv ->
-                    if (locationGranted) mv.location.updateSettings { enabled = true }
+                    if (locationGranted) mv.location.updateSettings { enabled = false }
                     // 畫 GPX 預定路線（淡橘色參考線）
                     if (selectedRoutePoints.size >= 2) {
                         routeLineManager?.deleteAll()
@@ -504,6 +509,20 @@ fun RunScreen(
                     }
                     // 畫 GPS 即時軌跡（深橘色）
                     val pts = tracker.points.toList()
+                    val currentManager = currentLocationMarkerManager
+                        ?: mv.annotations.createCircleAnnotationManager().also {
+                            currentLocationMarkerManager = it
+                        }
+                    val latestPoint = pts.lastOrNull()
+                    if (latestPoint != null) {
+                        currentLocationLoaded = true
+                        showCurrentLocationMarker(currentManager, latestPoint)
+                    } else if (locationGranted && !currentLocationLoaded) {
+                        currentLocationLoaded = true
+                        requestCurrentLocationPoint(context) { point ->
+                            showCurrentLocationMarker(currentManager, point)
+                        }
+                    }
                     if (pts.size >= 2) {
                         polylineManager?.deleteAll()
                         polylineManager?.create(
@@ -518,14 +537,20 @@ fun RunScreen(
             LocateMeButton(
                 enabled = locationGranted,
                 onClick = {
-                    val point = tracker.points.lastOrNull() ?: currentLocationPoint(context)
-                    point?.let {
+                    fun moveToCurrent(point: Point) {
+                        val manager = currentLocationMarkerManager
+                            ?: mapView.annotations.createCircleAnnotationManager().also {
+                                currentLocationMarkerManager = it
+                            }
+                        showCurrentLocationMarker(manager, point)
                         moveMapToPoint(
                             mapView = mapView,
-                            point = it,
+                            point = point,
                             zoom = if (phase == RunPhase.RUNNING) 17.0 else 16.0
                         )
                     }
+                    tracker.points.lastOrNull()?.let(::moveToCurrent)
+                        ?: requestCurrentLocationPoint(context, ::moveToCurrent)
                 },
                 modifier = Modifier
                     .align(Alignment.TopEnd)

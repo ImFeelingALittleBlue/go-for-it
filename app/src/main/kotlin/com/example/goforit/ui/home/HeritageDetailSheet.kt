@@ -102,6 +102,8 @@ fun HeritageDetailSheet(
         heritage = heritage,
         hasLocationPermission = hasLocationPermission || locationGranted
     )
+    val canUseSilverSalt = isNearHeritage ||
+        RestorationRepository.isDebugSilverSaltReady(heritage.id)
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -123,7 +125,11 @@ fun HeritageDetailSheet(
                         .statusBarsPadding()
                         .navigationBarsPadding()
                 ) {
-                    DetailTopBar(isRestored = isRestored, onBack = onDismiss)
+                    DetailTopBar(
+                        isRestored = isRestored,
+                        canUseSilverSalt = canUseSilverSalt,
+                        onBack = onDismiss
+                    )
 
                     Column(
                         modifier = Modifier
@@ -213,7 +219,7 @@ fun HeritageDetailSheet(
                             HeritageActionButton(
                                 isRestored = isRestored,
                                 isRestoring = isRestoring,
-                                isNearHeritage = isNearHeritage,
+                                isNearHeritage = canUseSilverSalt,
                                 points = points,
                                 onRestore = {
                                     if (SilverSaltStore.spend(context, RESTORE_COST)) {
@@ -259,9 +265,7 @@ fun HeritageDetailSheet(
     if (showDeleteDialog) {
         DeleteRecordDialog(
             onConfirm = {
-                restorationRecord?.docId
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let(RestorationRepository::delete)
+                restorationRecord?.let(RestorationRepository::delete)
                 showDeleteDialog = false
                 onDismiss()
             },
@@ -537,6 +541,7 @@ private fun PerspectiveGrid(modifier: Modifier = Modifier) {
 @Composable
 private fun DetailTopBar(
     isRestored: Boolean,
+    canUseSilverSalt: Boolean,
     onBack: () -> Unit
 ) {
     Row(
@@ -557,10 +562,18 @@ private fun DetailTopBar(
 
         Surface(
             shape = RoundedCornerShape(18.dp),
-            color = if (isRestored) Color(0xFF4CAF50) else Color(0xFF1F1F1F)
+            color = when {
+                isRestored -> Color(0xFF4CAF50)
+                canUseSilverSalt -> Color(0xFF9B6A3F)
+                else -> Color(0xFF1F1F1F)
+            }
         ) {
             Text(
-                if (isRestored) "✓ 已解鎖" else "X 未解鎖",
+                when {
+                    isRestored -> "✓ 已解鎖"
+                    canUseSilverSalt -> "可修復"
+                    else -> "X 未解鎖"
+                },
                 modifier = Modifier.padding(horizontal = 13.dp, vertical = 6.dp),
                 color = Color.White,
                 fontSize = 12.sp
@@ -885,8 +898,8 @@ private fun HeritageActionButton(
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9B6A3F))
             ) {
                 Text(
-                    if (enough) "以時光銀鹽解鎖老照片"
-                    else "問答補足時光銀鹽，以解鎖老照片",
+                    if (enough) "以時光銀鹽修復老照片"
+                    else "問答補足時光銀鹽，以修復老照片",
                     modifier = Modifier.padding(vertical = 4.dp)
                 )
             }

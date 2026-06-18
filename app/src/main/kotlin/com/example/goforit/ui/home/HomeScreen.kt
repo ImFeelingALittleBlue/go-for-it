@@ -35,8 +35,9 @@ import com.example.goforit.data.SilverSaltStore
 import com.example.goforit.ui.applyWarmMapStyle
 import com.example.goforit.ui.common.LocateMeButton
 import com.example.goforit.ui.common.SilverSaltAssetIcon
-import com.example.goforit.ui.common.currentLocationPoint
 import com.example.goforit.ui.common.moveMapToPoint
+import com.example.goforit.ui.common.requestCurrentLocationPoint
+import com.example.goforit.ui.common.showCurrentLocationMarker
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.MapView
@@ -64,7 +65,7 @@ import kotlinx.coroutines.delay
 val OrangeAccent = Color(0xFF9B6A3F)    // 設計稿主色：陶土棕
 val TextGray     = Color(0xFF8F8982)
 val ChipBg       = Color(0xFFF0ECE4)
-enum class HeritageFilter { ALL, RESTORED, PENDING }
+enum class HeritageFilter { ALL, RESTORED, REPAIRABLE, PENDING }
 
 private data class SelectedPlace(
     val name: String,
@@ -89,6 +90,7 @@ fun HomeScreen(
     val heritages = remember { HeritageRepository.loadHeritages(context) }
     val restorationRecords = RestorationRepository.records().toList()
     val restoredIds = restorationRecords.map { it.heritageId }.toSet()
+    val debugSilverSaltReadyEnabled = RestorationRepository.debugSilverSaltReadyEnabled
     var heritageFilter by remember { mutableStateOf(HeritageFilter.ALL) }
     // 古蹟清單是否展開（收合時把空間讓給地圖）
     var listExpanded by remember { mutableStateOf(true) }
@@ -102,12 +104,19 @@ fun HomeScreen(
     val statusFilteredHeritages = when (heritageFilter) {
         HeritageFilter.ALL -> heritages
         HeritageFilter.RESTORED -> heritages.filter { it.id in restoredIds }
-        HeritageFilter.PENDING -> heritages.filter { it.id !in restoredIds }
+        HeritageFilter.REPAIRABLE -> heritages.filter {
+            it.id !in restoredIds && RestorationRepository.isDebugSilverSaltReady(it.id)
+        }
+        HeritageFilter.PENDING -> heritages.filter {
+            it.id !in restoredIds && !RestorationRepository.isDebugSilverSaltReady(it.id)
+        }
     }
     val visibleHeritages = statusFilteredHeritages
     var markerManager by remember { mutableStateOf<CircleAnnotationManager?>(null) }
     var restoredMarkerManager by remember { mutableStateOf<PointAnnotationManager?>(null) }
     var searchMarkerManager by remember { mutableStateOf<CircleAnnotationManager?>(null) }
+    var currentLocationMarkerManager by remember { mutableStateOf<CircleAnnotationManager?>(null) }
+    var currentLocationLoaded by remember { mutableStateOf(false) }
     val markerLookup = remember { mutableMapOf<String, Heritage>() }
     var markerClickListenerInstalled by remember { mutableStateOf(false) }
 
@@ -162,7 +171,13 @@ fun HomeScreen(
     var selected by remember { mutableStateOf<Heritage?>(null) }
 
     // 篩選標籤切換時，直接用現有 manager 重畫標記（不依賴 AndroidView update 的非同步 getStyle）
-    LaunchedEffect(heritageFilter, markerManager, restoredMarkerManager, restoredIds) {
+    LaunchedEffect(
+        heritageFilter,
+        markerManager,
+        restoredMarkerManager,
+        restoredIds,
+        debugSilverSaltReadyEnabled
+    ) {
         val pendingManager = markerManager ?: return@LaunchedEffect
         val photoManager = restoredMarkerManager ?: return@LaunchedEffect
         setHeritageMarkers(
@@ -258,7 +273,7 @@ fun HomeScreen(
                 // update：當 locationGranted 變成 true 時被呼叫，此時樣式已載入完成
                 update = { mv ->
                     if (locationGranted) {
-                        mv.location.updateSettings { enabled = true }
+                        mv.location.updateSettings { enabled = false }
                     }
                     mv.mapboxMap.getStyle {
                         val manager = markerManager
@@ -271,6 +286,16 @@ fun HomeScreen(
                             ?: mv.annotations.createCircleAnnotationManager().also {
                                 searchMarkerManager = it
                             }
+                        val currentManager = currentLocationMarkerManager
+                            ?: mv.annotations.createCircleAnnotationManager().also {
+                                currentLocationMarkerManager = it
+                            }
+                        if (locationGranted && !currentLocationLoaded) {
+                            currentLocationLoaded = true
+                            requestCurrentLocationPoint(context) { point ->
+                                showCurrentLocationMarker(currentManager, point)
+                            }
+                        }
                         if (!markerClickListenerInstalled) {
                             manager.addClickListener(
                                 OnCircleAnnotationClickListener { annotation ->
@@ -318,7 +343,12 @@ fun HomeScreen(
             LocateMeButton(
                 enabled = locationGranted,
                 onClick = {
-                    currentLocationPoint(context)?.let { point ->
+                    requestCurrentLocationPoint(context) { point ->
+                        val manager = currentLocationMarkerManager
+                            ?: mapView.annotations.createCircleAnnotationManager().also {
+                                currentLocationMarkerManager = it
+                            }
+                        showCurrentLocationMarker(manager, point)
                         moveMapToPoint(
                             mapView = mapView,
                             point = point,
